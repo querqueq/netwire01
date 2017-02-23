@@ -1,0 +1,8 @@
+flags: {}
+extra-package-dbs: null
+packages:
+- '.'
+extra-deps:
+- FTGL-2.1
+- Hipmunk-5.2.0.17
+resolver: lts-8.0
