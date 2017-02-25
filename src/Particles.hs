@@ -23,7 +23,7 @@ data Particle = Particle
     } deriving Show
 
 explosion :: (HasTime t s, Monad m) => Float -> Float -> Wire s () m a Float
-explosion speed accel = when (>0) . integral speed . pure accel
+explosion speed accel = when (>0.03) . integral speed . pure accel --> 0.03
 
 randDelayWiresWith :: (Fractional t, HasTime t s, Monoid e, Monad m) => (Float,Float) -> Wire s e m a b -> [Wire s e m a b] -> [Wire s e m a b]
 randDelayWiresWith (f,t) placeholder wires = zipWith 
@@ -35,12 +35,14 @@ randDelayWiresWith (f,t) placeholder wires = zipWith
 --particles origin speed accel = sequenceA $ map (particle origin $ explosion speed accel) [0..360]
 
 thruster origin speed r = 
-      particleCone origin (randDelayWiresWith (0,10) (pure 0) 
-    $ replicate (truncate $ 1000 * speed ) 
-    $ explosion speed (-speed)) r (0.3)
+    particleCone origin 
+        (randDelayWiresWith (0,10) (pure 0) $ map (\v -> explosion v (-v)) ds)
+    r (0.3)
+    where n = 567 -- truncate $ 1000 * speed
+          ds = take n $ randomRs (speed-speed/10,speed+speed/10) $ mkStdGen 9
 
 particleCone :: (HasTime t s, Monad m) => (Float, Float) -> [Wire s () m a Float] -> Float -> Float -> Wire s () m a [Particle]
-particleCone origin speedWires offsetR r = sequenceA $ map recycle $ zipWith (particle origin) speedWires $ randomRs range (mkStdGen 1)
+particleCone origin speedWires offsetR r = sequenceA $ zipWith (particle origin) speedWires $ randomRs range (mkStdGen 1)
     where range = (offsetR-r/2,offsetR+r/2)
 
 particle :: (HasTime t s, Monad m) => (Float, Float) -> Wire s () m a Float -> Float -> Wire s () m a Particle
@@ -55,7 +57,7 @@ renderParticles = GL.renderPrimitive GL.Points . mapM_ renderPoint . map (\Parti
 
 renderThrustParticles :: [Particle] -> IO ()
 renderThrustParticles = GL.renderPrimitive GL.Quads . mapM_ (\Particle {..} -> do
-    GL.color $ GL.Color4 1 (0.6 - particleV) (0 :: GL.GLfloat) 0.5
+    GL.color $ GL.Color4 1 (0.9 - particleV) (0 :: GL.GLfloat) 0.5
     renderPoint (particleX,particleY)
     renderPoint (particleX+0.005,particleY)
     renderPoint (particleX+0.005,particleY+0.005)
@@ -74,7 +76,7 @@ runParticle window particleWire = do
             if shouldClose
             then return ()
             else case particles of
-                Left _ -> return ()
+                Left _ -> runNetwork sess' wire'
                 Right particles -> do
                     GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
                     GL.clear [GL.ColorBuffer]
@@ -83,15 +85,18 @@ runParticle window particleWire = do
                     GLFW.swapBuffers window
                     runNetwork sess' wire'
 
-testThrust = testParticle $ thruster (0,0) (0.5) pi
+testThrust v = testParticle $ thruster (0,0) v pi
 
-testExplosion speed = testParticle 
-    $ particleCone (0,0) 
-        (randDelayWiresWith (1,200) (pure 0) 
-        $ replicate (truncate $ 1000 * speed ) 
-        $ explosion speed (-speed) 
-        )
-    0 (pi*2)
+testExplosion v = testParticle $ boom (0,0) v
+
+boom (x,y) v = mconcat $ map cone
+    [randDelayWiresWith (0.2,0.6) 0 $ map (\v -> explosion v (-v*3)) $ vs 100
+    ,randDelayWiresWith (0.0,0.3) 0 $ map (\v -> explosion v (-v*1)) $ vs 150
+    ,randDelayWiresWith (0.0,0.4) 0 $ map (\v -> explosion (v*1.5) (-v)) $ vs 300
+    ]
+    where --delays = randDelayWiresWith (0.2,3) 0
+          cone ws = particleCone (x,y) ws 0 (pi*2)
+          vs n = take n $ randomRs (v-v/2,v+v/2) $ mkStdGen 10
 
 testParticle :: Wire (Timed NominalDiffTime ()) () IO a [Particle] -> IO ()
 testParticle wire = do
