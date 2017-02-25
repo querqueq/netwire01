@@ -23,11 +23,15 @@ import qualified Graphics.Rendering.FTGL as FTGL
 import Numeric 
 import System.Random
 import Stars
+import Lib
+import Particles
 
+{--
 data GameState = GameState
     { playerShip    :: Ship
     , stars         :: [(Float,Float)]
     } deriving Show
+--}
 
 data Ship = Ship
     { posX      :: Float
@@ -41,6 +45,13 @@ data Ship = Ship
     , dR        :: Float
     , thrusters :: Thrusters
     } deriving Show
+
+--thrustsWire :: (HasTime t s) => InputWire s Ship [Particle]
+--thrustsWire = mkPure $ \sess Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
+--        Right $ thruster (x,y) thrusterThrust (thrusterOffsetR+r)
+    
+
+allThruster (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
 
 data Thrusters = Thrusters
     { thrusterFront     :: Thruster
@@ -67,9 +78,6 @@ prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format va
     ,("X-Thrust", aX, "")
     ,("R-Thrust", aR, "")
     ]
-    where format x = showFFloat (Just 2) x ""
-
-type InputWire s a b = Wire s () (GLFWInputT IO) a b
 
 thrust :: [GLFW.Key] -> Float -> InputWire s () Float
 thrust ks a = pure a . (foldr (<|>) (keyPressed GLFW.Key'X) $ map keyPressed ks) <|> pure 0
@@ -127,9 +135,6 @@ renderThrust (x,y) r (Thruster {..}) = if thrusterThrust /= 0
           y' = y + thrusterOffsetY
           s' = thrusterThrust / 5
 
-renderPoint :: (Float, Float) -> IO ()
-renderPoint (x, y) = GL.vertex $ GL.Vertex2 (realToFrac x :: GL.GLfloat)
-                                            (realToFrac y :: GL.GLfloat)
 generatePoints :: Float -> Float -> Float -> [(Float, Float)]
 generatePoints x y s =
     [ (x - s, y - s)
@@ -208,12 +213,6 @@ rxyaccel = (\d (aX,aY) -> rotatePoint (0,0) d (aX,aY)) <$> rdegree' <*> ((,) <$>
 
 rspeeds' :: HasTime t s => InputWire s () (Float,Float)
 rspeeds' = (,) <$> xspeed' <*> yspeed'
-
-rotatePoint :: (Float, Float) -> Float -> (Float, Float) -> (Float, Float)
-rotatePoint (xo,yo) θ (x,y) = (x' * (cos θ) - y' * (sin θ) + xo
-                              ,y' * (cos θ) + x' * (sin θ) + yo)
-    where x' = x - xo
-          y' = y - yo
 
 main = do
     GLFW.init

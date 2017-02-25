@@ -11,8 +11,8 @@ import qualified Graphics.Rendering.FTGL as FTGL
 import System.Random
 import Control.Monad
 import Numeric 
+import Lib
 
-type Point = (Float,Float)
 data Star = Star 
     { starX :: Float
     , starY :: Float
@@ -22,8 +22,6 @@ data Star = Star
 
 instance Show Star where
     show (Star {..}) = "(" ++ format starX ++ "," ++ format starY ++ ") " ++ format starBrightness ++ "*"
-
-format x = showFFloat (Just 2) x ""
 
 skyWire :: (Fractional t, Monad m, HasTime t s, RandomGen g) => g -> Int -> Wire s () m a [Star]
 skyWire g starsN = do
@@ -60,10 +58,6 @@ pulsateWire base peak totalT holdT = for totalT . integral base .
     where changeT = (totalT - holdT) / 2
           target = peak - base
 
-alternateByInhibit w1 w2 = w1 --> w2 --> alternateByInhibit w1 w2
-
-renderPoint :: Point -> IO ()
-renderPoint (x, y) = GL.vertex $ GL.Vertex2 (realToFrac x :: GL.GLfloat) (realToFrac y :: GL.GLfloat)
 
 renderStar :: Star -> IO () 
 renderStar (Star {..}) = GL.renderPrimitive GL.Lines
