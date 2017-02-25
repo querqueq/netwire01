@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Stars (skyWire,renderStar) where
+module Stars (skyWire,renderStar,Star) where
 
 import Prelude hiding ((.)) -- To use (.) in the scope of Categories instead
 import Control.Wire 
@@ -61,7 +61,9 @@ pulsateWire base peak totalT holdT = for totalT . integral base .
 
 renderStar :: Star -> IO () 
 renderStar (Star {..}) = GL.renderPrimitive GL.Lines
-    $ mapM_ renderPoint 
+    $ mapM_ (\p -> do 
+        GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
+        renderPoint p)
     $ [(x-b,y),(x+b,y)
       ,(x,y-b),(x,y+b)
       ,(x-b',y+b'),(x+b',y-b')
@@ -75,6 +77,7 @@ runStars window = do
     g <- getStdGen
     runNetwork clockSession_ $ skyWire g 678
     where runNetwork sess wire = do
+            GLFW.pollEvents
             (st,sess') <- stepSession sess
             (stars,wire') <- stepWire wire st $ Right undefined
             shouldClose <- GLFW.windowShouldClose window
@@ -94,7 +97,7 @@ runStars window = do
 testStars :: IO ()
 testStars = do
     GLFW.init
-    (Just window) <- GLFW.createWindow 1280 1280 "Stars Demo" Nothing Nothing
+    (Just window) <- GLFW.createWindow 1080 1080 "Stars Demo" Nothing Nothing
     GLFW.makeContextCurrent (Just window)
     font <- FTGL.createBitmapFont "DroidSansMono.ttf"
     FTGL.setFontFaceSize font 24 72

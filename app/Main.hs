@@ -12,7 +12,7 @@ import FRP.Netwire
 import Data.IORef
 import Data.Fixed (mod')
 import Debug.Trace
-import Control.Monad
+import Control.Monad hiding (when,unless)
 import Control.Monad.IO.Class
 import Data.IORef
 import Data.StateVar (($=))
@@ -46,10 +46,9 @@ data Ship = Ship
     , thrusters :: Thrusters
     } deriving Show
 
---thrustsWire :: (HasTime t s) => InputWire s Ship [Particle]
---thrustsWire = mkPure $ \sess Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
---        Right $ thruster (x,y) thrusterThrust (thrusterOffsetR+r)
-    
+frontThrusterOrigin :: (HasTime t s) => InputWire s Ship (Point,Float,Float)
+frontThrusterOrigin = mkPure_ $ \Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
+    Right $ ((x,y),r+(3*pi/2),thrusterThrust)
 
 allThruster (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
 
@@ -149,38 +148,54 @@ run font window inptCtrl = do
 --        xys <- zip <$> f <*> f
 --        let ss = map (\(x,y) -> Star x y 0 1) xys
         g <- getStdGen
-        runNetwork inpt clockSession_ shipWire $ skyWire g 678
-    where 
-        runNetwork inpt session wire sky = do
-            --GLFW.pollEvents
-            inpt' <- pollGLFW inpt inptCtrl
-            (st , session') <- stepSession session
-            ((wt', wire'), inpt'') <-
-                runGLFWInputT (stepWire wire st $ Right undefined) inpt'
-            (stars, sky') <- stepWire sky st $ Right undefined
-            shouldClose <- GLFW.windowShouldClose window
-            if shouldClose
-            then return ()
-            else case wt' of
+        runNetwork font window inptCtrl inpt clockSession_ 
+            shipWire 
+            (skyWire g 678) 
+            (thruster . frontThrusterOrigin . shipWire)
+
+runNetwork :: (HasTime t s, Fractional t)
+                         => FTGL.Font
+                         -> GLFW.Window
+                         -> GLFWInputControl
+                         -> GLFWInputState
+                         -> Session IO s
+                         -> InputWire s () Ship
+                         -> Wire s e IO a [Star]
+                         -> InputWire s () [Particle]
+                         -> IO ()
+runNetwork font window inptCtrl inpt session wire sky ft = do
+    --GLFW.pollEvents
+    inpt' <- pollGLFW inpt inptCtrl
+    (st , session') <- stepSession session
+    ((ftParticles,ft'),_) <- runGLFWInputT (stepWire ft st $ Right undefined) inpt'
+    ((wt', wire'), inpt'') <-
+        runGLFWInputT (stepWire wire st $ Right undefined) inpt'
+    (stars, sky') <- stepWire sky st $ Right undefined
+    shouldClose <- GLFW.windowShouldClose window
+    if shouldClose
+    then return ()
+    else case wt' of
+        Left _ -> return ()
+        Right ship@(Ship {..}) -> do
+            GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
+            GL.clear [GL.ColorBuffer]
+            case ftParticles of 
                 Left _ -> return ()
-                Right ship@(Ship {..}) -> do
-                    GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
-                    GL.clear [GL.ColorBuffer]
-                    FTGL.renderFont font (prettyShow ship) FTGL.Front
-                    case stars of 
-                        Left _ -> return ()
-                        Right stars -> mapM_ renderStar stars
-                    GL.renderPrimitive GL.Quads 
-                        $ mapM_ renderPoint 
-                        $ map (rotatePoint (posX,posY) dR)
-                        $ generatePoints posX posY s
-                    renderThrust (posX, posY) dR (thrusterFront thrusters)
-                    renderThrust (posX, posY) dR (thrusterBack thrusters)
-                    renderThrust (posX, posY) dR (thrusterLeft thrusters)
-                    renderThrust (posX, posY) dR (thrusterRight thrusters)
-                    GL.flush
-                    GLFW.swapBuffers window
-                    runNetwork inpt'' session' wire' sky'
+                Right particles -> renderThrustParticles particles
+            FTGL.renderFont font (prettyShow ship) FTGL.Front
+            case stars of 
+                Left _ -> return ()
+                Right stars -> mapM_ renderStar stars
+            GL.renderPrimitive GL.Quads 
+                $ mapM_ renderPoint 
+                $ map (rotatePoint (posX,posY) dR)
+                $ generatePoints posX posY s
+            renderThrust (posX, posY) dR (thrusterBack thrusters)
+            renderThrust (posX, posY) dR (thrusterLeft thrusters)
+            renderThrust (posX, posY) dR (thrusterRight thrusters)
+            GL.flush
+            GLFW.swapBuffers window
+            runNetwork font window inptCtrl inpt'' session' wire' sky' ft'
 
 xaccel' :: InputWire s () Float
 xaccel' = (+) <$> leftThrust <*> rightThrust
