@@ -50,7 +50,17 @@ frontThrusterOrigin :: (HasTime t s) => InputWire s Ship (Point,Float,Float)
 frontThrusterOrigin = mkPure_ $ \Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
     Right $ ((x,y),r+(3*pi/2),thrusterThrust)
 
-allThruster (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
+thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Float,Float)
+thrusterOrigin t = mkPure_ $ \ship@(Ship {posX = x, posY = y, dR = r}) -> do 
+    Right $ ((x,y),r+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
+
+thrustersWire :: (HasTime t s) => InputWire s Ship [(Point,Float,Float)]
+thrustersWire = mkPure_ $ \ship -> do
+    Right $ map (thrusterTriple ship) $ allThrusters $ thrusters ship
+
+allThrusters (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
+thrusterTriple (Ship {posX = x, posY = y, dR = r}) (Thruster {..}) =
+    ((x,y),r+(3*pi/2),thrusterThrust)
 
 data Thrusters = Thrusters
     { thrusterFront     :: Thruster
@@ -117,11 +127,13 @@ shipWire = Ship
        <*> raccel'
        <*> rspeed'
        <*> rdegree'
-       <*> (Thrusters <$> (Thruster <$> pure 0 <*> pure s <*> pure pi <*> frontThrust)
-                      <*> (Thruster <$> pure 0 <*> pure (-s) <*> pure (-pi) <*> backThrust)
-                      <*> (Thruster <$> pure 0 <*> pure (-s) <*> pure (pi/2) <*> leftThrust)
-                      <*> (Thruster <$> pure 0 <*> pure s <*> pure (-3*pi/2) <*> rightThrust)
+       <*> (Thrusters <$> (Thruster <$> pure 0 <*> pure 0 <*> pure (3*pi/2) <*> frontThrust)
+                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure (3*pi/2) <*> backThrust)
+                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> rightThrust)
+                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> leftThrust)
            )
+
+
 
 renderThrust :: (Float,Float) -> Float -> Thruster -> IO ()
 renderThrust (x,y) r (Thruster {..}) = if thrusterThrust /= 0 
@@ -151,7 +163,16 @@ run font window inptCtrl = do
         runNetwork font window inptCtrl inpt clockSession_ 
             shipWire 
             (skyWire g 678) 
-            (thruster . frontThrusterOrigin . shipWire)
+            thrustsWire
+            --(thruster . frontThrusterOrigin . shipWire)
+
+thrustsWire :: (Fractional t, HasTime t s) => InputWire s () [Particle]
+thrustsWire = 
+      mconcat 
+    $ map (thruster.) 
+    $ zipWith (\t s -> (thrusterOrigin $ t . thrusters) . s) 
+      [thrusterRight, thrusterFront, thrusterBack, thrusterLeft]
+    $ repeat shipWire
 
 runNetwork :: (HasTime t s, Fractional t)
                          => FTGL.Font
@@ -186,13 +207,15 @@ runNetwork font window inptCtrl inpt session wire sky ft = do
             case stars of 
                 Left _ -> return ()
                 Right stars -> mapM_ renderStar stars
+            --{--
             GL.renderPrimitive GL.Quads 
                 $ mapM_ renderPoint 
                 $ map (rotatePoint (posX,posY) dR)
                 $ generatePoints posX posY s
-            renderThrust (posX, posY) dR (thrusterBack thrusters)
-            renderThrust (posX, posY) dR (thrusterLeft thrusters)
-            renderThrust (posX, posY) dR (thrusterRight thrusters)
+                --}
+            --renderThrust (posX, posY) dR (thrusterBack thrusters)
+            --renderThrust (posX, posY) dR (thrusterLeft thrusters)
+            --renderThrust (posX, posY) dR (thrusterRight thrusters)
             GL.flush
             GLFW.swapBuffers window
             runNetwork font window inptCtrl inpt'' session' wire' sky' ft'

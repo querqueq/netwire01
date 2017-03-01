@@ -17,7 +17,7 @@ data Star = Star
     { starX :: Float
     , starY :: Float
     , starZ :: Float
-    , starBrightness :: Float
+    , starBrightness :: !Float
     } 
 
 instance Show Star where
@@ -69,9 +69,8 @@ renderStar (Star {..}) = GL.renderPrimitive GL.Lines
       ,(x-b',y+b'),(x+b',y-b')
       ,(x+b',y+b'),(x-b',y-b')
       ]
-    where x = starX; y = starY; b = starBrightness; b' = starBrightness / 3
+    where x = starX; y = starY; b = starBrightness; b' = starBrightness / 2
 
---{--
 runStars :: GLFW.Window -> IO ()
 runStars window = do
     g <- getStdGen
@@ -92,7 +91,6 @@ runStars window = do
                     GL.flush
                     GLFW.swapBuffers window
                     runNetwork sess' wire'
---}
 
 testStars :: IO ()
 testStars = do

@@ -38,7 +38,7 @@ testExpel = testParticle $ expel 4 200 (randomRs (2*pi-0.3,2*pi+0.3) $ mkStdGen 
 testFlyCircle = testParticle $ thruster . circling (-1)
 
 explosion :: (HasTime t s, Fractional t, Monad m) => Float -> Float -> Wire s () m a Float
-explosion speed accel = when (>0) . integral speed . pure accel --> for 0.3 . pure 1000 --> pure 0
+explosion speed accel = when (if accel > 0 then (<0) else (>0)) . integral speed . pure accel --> for 0.3 . pure 1000 --> pure 0
                                                                  -- FIXME replace workaround with inhibit
                                                                  -- and findout how to remove inhibted
                                                                  -- wires from a list
