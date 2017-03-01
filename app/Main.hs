@@ -89,7 +89,7 @@ prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format va
     ]
 
 thrust :: [GLFW.Key] -> Float -> InputWire s () Float
-thrust ks a = pure a . (foldr (<|>) (keyPressed GLFW.Key'X) $ map keyPressed ks) <|> pure 0
+thrust ks a = pure a . (foldr (<|>) (keyPressed GLFW.Key'Y) $ map keyPressed ks) <|> pure 0
 
 f :: Float
 f = 1.5
@@ -101,15 +101,15 @@ mainAcceleration :: Float
 mainAcceleration = 0.6 / f
 
 maneuveringAcceleration :: Float
-maneuveringAcceleration = 0.3 / f
+maneuveringAcceleration = mainAcceleration / 2
 
 rotationalAcceleration :: Float
 rotationalAcceleration = 2
 
-frontThrust         = thrust [GLFW.Key'W,GLFW.Key'Up] mainAcceleration
-leftThrust          = thrust [GLFW.Key'A,GLFW.Key'Left] (-maneuveringAcceleration)
-backThrust          = thrust [GLFW.Key'S,GLFW.Key'Down] (-maneuveringAcceleration)
-rightThrust         = thrust [GLFW.Key'D,GLFW.Key'Right] maneuveringAcceleration
+frontThrust         = thrust [GLFW.Key'W,GLFW.Key'Up,GLFW.Key'X] mainAcceleration
+leftThrust          = thrust [GLFW.Key'A,GLFW.Key'Left,GLFW.Key'X] (-maneuveringAcceleration)
+backThrust          = thrust [GLFW.Key'S,GLFW.Key'Down,GLFW.Key'X] (-maneuveringAcceleration)
+rightThrust         = thrust [GLFW.Key'D,GLFW.Key'Right,GLFW.Key'X] maneuveringAcceleration
 rotateLeftThrust    = thrust [GLFW.Key'Q] rotationalAcceleration
 rotateRightThrust   = thrust [GLFW.Key'E] (-rotationalAcceleration)
 

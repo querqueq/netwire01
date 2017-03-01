@@ -15,7 +15,7 @@ import Lib
 import FRP.Netwire.Input
 import FRP.Netwire.Input.GLFW
 import Debug.Trace
-import Data.Either (rights)
+import Data.Either (rights,isRight)
 
 data Particle = Particle
     { particleX :: Float
@@ -23,10 +23,10 @@ data Particle = Particle
     , particleV :: Float
     } deriving Show
 
-swirlUp :: (HasTime t s, Monad m) => (Float,Float) -> Wire s () m a (Point,Float,Float)
-swirlUp (x,y) = (,,) <$> pos <*> r <*> pure 0.5
-    where pos = (,) <$> ((/4) . sin <$> integral x . pure (pi/2)) <*> integral y . pure 0.2
-          r = 0
+swirlUp :: (HasTime t s, Monad m) => (Float,Float) -> Wire s () m a (Point,Point,Float,Float)
+swirlUp (x,y) = (,,,) <$> pos <*> pure (0,0) <*> r <*> pure 0.5
+    where pos = (,) <$> ((/4) . sin <$> integral x . pure (pi/2)) <*> integral y . pure 0.4
+          r = -pi/2
 
 circling :: (HasTime t s, Monad m) => Float -> Wire s () m a (Point,Point,Float,Float)
 circling raccel = (\r' pos'@(x,y) v -> (rotatePoint (0,0) r' pos',(0,0),r',v)) <$> r <*> pos <*> pure 0.5
@@ -34,8 +34,9 @@ circling raccel = (\r' pos'@(x,y) v -> (rotatePoint (0,0) r' pos',(0,0),r',v)) <
           pos = (,) <$> 0 <*> (-0.8)
 
 
-testExpel = testParticle $ expel 4 200 (randomRs (2*pi-0.3,2*pi+0.3) $ mkStdGen 11) thrustParticleSpeed (pure []) . circling (-1)
+--testExpel = testParticle $ expel 4 200 (randomRs (2*pi-0.3,2*pi+0.3) $ mkStdGen 11) thrustParticleSpeed [] . circling (-1)
 testFlyCircle = testParticle $ thruster . circling (-1)
+testFlyUp = testParticle $ thruster . swirlUp (0,-1)
 
 explosion :: (HasTime t s, Fractional t, Monad m) => Float -> Float -> Wire s () m a Float
 explosion speed accel = when (if accel > 0 then (<0) else (>0)) . integral speed . pure accel --> for 0.3 . pure 1000 --> pure 0
@@ -58,21 +59,23 @@ randDelayWiresWith (f,t) placeholder wires = zipWith
 --particles origin speed accel = sequenceA $ map (particle origin $ explosion speed accel) [0..360]
 
 thruster :: (HasTime t s, Monad m, Fractional t) => Wire s () m (Point,Point,Float,Float) [Particle]
-thruster = expel 3 60 range thrustParticleSpeed (pure [])
-    where range = randomRs (-0.3,0.3) $ mkStdGen 12
+thruster = expel 3 0.3 (mkStdGen 12) thrustParticleSpeed []
 
-expel :: (HasTime t s, Monad m) => Int -> Int -> [Float] 
-                                -> (Float -> Wire s () m a Float) 
-                                -> Wire s () m a [Particle] 
-                                -> Wire s () m (Point,Point,Float,Float) [Particle]
-expel newN maxN rands speedWire particlesWire = mkGen $ \ds (origin,speed,r,a) -> do
-    let angles = take newN rands
-        newParticle angle = particle origin speed (speedWire a) (angle+r)
-        newParticles = sequenceA $ map newParticle angles
-        updatedParticlesWire = if a /= 0 then fmap (take maxN) $ (++) <$> newParticles <*> particlesWire else particlesWire
-    -- TODO remove inhibited particles
-    (particles,particlesWire') <- stepWire updatedParticlesWire ds $ Right undefined 
-    return (particles, expel newN maxN (drop newN rands) speedWire particlesWire')
+expel :: (HasTime t s, Monad m, Fractional t, RandomGen g) 
+                => Int 
+                -> Float
+                -> g 
+                -> (Float -> Wire s () m a Float) 
+                -> [Wire s () m a Particle]
+                -> Wire s () m (Point,Point,Float,Float) [Particle]
+expel newN angleMax seeder speedWire particleWires = mkGen $ \ds (origin,speed,r,a) -> do
+    let (angleSeed,g') = random seeder
+        angles = take newN $ randomRs (-angleMax,angleMax) $ mkStdGen angleSeed 
+        newParticle angle = for (fromRational $ toRational $ 1 - abs angle)  . particle origin speed (speedWire a) (angle+r)
+        newParticles = map newParticle angles
+        updatedParticleWires = if a /= 0 then newParticles ++ particleWires else particleWires
+    (particles,particleWires') <- fmap (unzip.(filter (\(p,_) -> isRight p))) $ sequenceA $ map (\w -> stepWire w ds $ Right undefined) updatedParticleWires
+    return (sequenceA particles, expel newN angleMax g' speedWire particleWires')
 
 {--
 thruster origin speed r = 
