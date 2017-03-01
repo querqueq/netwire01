@@ -50,9 +50,9 @@ frontThrusterOrigin :: (HasTime t s) => InputWire s Ship (Point,Float,Float)
 frontThrusterOrigin = mkPure_ $ \Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
     Right $ ((x,y),r+(3*pi/2),thrusterThrust)
 
-thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Float,Float)
-thrusterOrigin t = mkPure_ $ \ship@(Ship {posX = x, posY = y, dR = r}) -> do 
-    Right $ ((x,y),r+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
+thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Point,Float,Float)
+thrusterOrigin t = mkPure_ $ \ship@(Ship {..}) -> do 
+    Right $ ((posX,posY),(vX,vY),dR+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
 
 thrustersWire :: (HasTime t s) => InputWire s Ship [(Point,Float,Float)]
 thrustersWire = mkPure_ $ \ship -> do
@@ -98,10 +98,10 @@ s :: Float
 s = 0.02 / f
 
 mainAcceleration :: Float
-mainAcceleration = 0.2 / f
+mainAcceleration = 0.6 / f
 
 maneuveringAcceleration :: Float
-maneuveringAcceleration = 0.1 / f
+maneuveringAcceleration = 0.3 / f
 
 rotationalAcceleration :: Float
 rotationalAcceleration = 2

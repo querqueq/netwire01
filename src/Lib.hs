@@ -1,8 +1,10 @@
 module Lib where
 
+import Prelude hiding ((.)) -- To use (.) in the scope of Categories instead
 import FRP.Netwire 
 import FRP.Netwire.Input
 import FRP.Netwire.Input.GLFW
+import Control.Wire.Core
 import Numeric 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
@@ -13,6 +15,9 @@ type Point = (Float,Float)
 mapTuple :: (a -> b) -> (a,a) -> (b,b)
 mapTuple f (x,y) = (f x,f y)
 
+--isInhibited :: 
+
+f = inhibit ()
 
 alternateByInhibit w1 w2 = w1 --> w2 --> alternateByInhibit w1 w2
 
