@@ -15,10 +15,6 @@ type Point = (Float,Float)
 mapTuple :: (a -> b) -> (a,a) -> (b,b)
 mapTuple f (x,y) = (f x,f y)
 
---isInhibited :: 
-
-f = inhibit ()
-
 alternateByInhibit w1 w2 = w1 --> w2 --> alternateByInhibit w1 w2
 
 format x = showFFloat (Just 2) x ""
