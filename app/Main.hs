@@ -6,6 +6,7 @@ module Main where
 import Prelude hiding ((.)) -- To use (.) in the scope of Categories instead
 import qualified Prelude as P ((.))
 import Control.Wire 
+import qualified Graphics.Rendering.OpenGL.GLU.Matrix as GL
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import FRP.Netwire 
@@ -174,6 +175,8 @@ thrustsWire =
       [thrusterRight, thrusterFront, thrusterBack, thrusterLeft]
     $ repeat shipWire
 
+fromToRational = fromRational . toRational
+
 runNetwork :: (HasTime t s, Fractional t)
                          => FTGL.Font
                          -> GLFW.Window
@@ -198,6 +201,7 @@ runNetwork font window inptCtrl inpt session wire sky ft = do
     else case wt' of
         Left _ -> return ()
         Right ship@(Ship {..}) -> do
+            --GL.loadIdentity
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
             GL.clear [GL.ColorBuffer]
             case ftParticles of 
@@ -207,15 +211,14 @@ runNetwork font window inptCtrl inpt session wire sky ft = do
             case stars of 
                 Left _ -> return ()
                 Right stars -> mapM_ renderStar stars
-            --{--
             GL.renderPrimitive GL.Quads 
                 $ mapM_ renderPoint 
                 $ map (rotatePoint (posX,posY) dR)
                 $ generatePoints posX posY s
-                --}
-            --renderThrust (posX, posY) dR (thrusterBack thrusters)
-            --renderThrust (posX, posY) dR (thrusterLeft thrusters)
-            --renderThrust (posX, posY) dR (thrusterRight thrusters)
+            --GL.preservingMatrix $ do
+            --GL.matrixMode $= GL.Modelview 0
+            GL.loadIdentity
+            GL.lookAt (GL.Vertex3 (fromToRational posX) (fromToRational posY) 1) (GL.Vertex3 (fromToRational posX) (fromToRational posY) 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
             runNetwork font window inptCtrl inpt'' session' wire' sky' ft'
@@ -251,6 +254,12 @@ rxyaccel = (\d (aX,aY) -> rotatePoint (0,0) d (aX,aY)) <$> rdegree' <*> ((,) <$>
 
 rspeeds' :: HasTime t s => InputWire s () (Float,Float)
 rspeeds' = (,) <$> xspeed' <*> yspeed'
+
+zero :: GL.GLdouble
+zero = 0
+
+vc = GL.Vector3 zero zero zero
+vx = GL.Vertex3 zero zero zero
 
 main = do
     GLFW.init

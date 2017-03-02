@@ -105,10 +105,11 @@ renderThrustParticles :: [Particle] -> IO ()
 renderThrustParticles = GL.renderPrimitive GL.Points . mapM_ (\Particle {..} -> do
     GL.color $ GL.Color4 1 0.5 (0 :: GL.GLfloat) 0.5
     renderPoint (particleX,particleY)
-   -- renderPoint (particleX+0.005,particleY)
-   -- renderPoint (particleX+0.005,particleY+0.005)
-   -- renderPoint (particleX,particleY+0.005)
+    --renderPoint (particleX+size,particleY)
+    --renderPoint (particleX+size,particleY+size)
+    --renderPoint (particleX,particleY+size)
     )
+    where size = 0.007
 
 runParticle :: GLFW.Window -> Wire (Timed NominalDiffTime ()) () IO a [Particle] -> IO ()
 runParticle window particleWire = do
