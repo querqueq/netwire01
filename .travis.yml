@@ -9,11 +9,7 @@
 # named .travis.yml
 
 # Use new container infrastructure to enable caching
-sudo: false
-
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y ftgl-dev
+sudo: true
 
 # Do not choose a language; we provide our own build tools.
 language: generic
@@ -30,6 +26,8 @@ addons:
       - libgmp-dev
 
 before_install:
+- sudo apt-get -qq update
+- sudo apt-get install -y ftgl-dev
 # Download and unpack the stack executable
 - mkdir -p ~/.local/bin
 - export PATH=$HOME/.local/bin:$PATH
