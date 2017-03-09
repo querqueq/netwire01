@@ -137,6 +137,8 @@ runParticle window particleWire = do
                     GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
                     GL.clear [GL.ColorBuffer]
                     renderXYcoloredParticles particles 
+                    GL.loadIdentity
+                    GL.perspective 1 1 1 100000
                     GL.flush
                     GLFW.swapBuffers window
                     runNetwork sess' wire'
