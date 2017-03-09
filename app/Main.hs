@@ -99,7 +99,7 @@ s :: Float
 s = 0.02 / f
 
 mainAcceleration :: Float
-mainAcceleration = 0.6 / f
+mainAcceleration = 0.4 / f
 
 maneuveringAcceleration :: Float
 maneuveringAcceleration = mainAcceleration / 2

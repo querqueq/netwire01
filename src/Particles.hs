@@ -18,9 +18,9 @@ import Debug.Trace
 import Data.Either (rights,isRight)
 
 data Particle = Particle
-    { particleX :: Float
-    , particleY :: Float
-    , particleV :: Float
+    { particleX  :: Float
+    , particleY  :: Float
+    , particleV  :: Float
     } deriving Show
 
 swirlUp :: (HasTime t s, Monad m) => (Float,Float) -> Wire s () m a (Point,Point,Float,Float)
@@ -103,13 +103,22 @@ renderParticles = GL.renderPrimitive GL.Points . mapM_ renderPoint . map (\Parti
 
 renderThrustParticles :: [Particle] -> IO ()
 renderThrustParticles = GL.renderPrimitive GL.Points . mapM_ (\Particle {..} -> do
-    GL.color $ GL.Color4 1 0.5 (0 :: GL.GLfloat) 0.5
+    GL.color $ GL.Color4 1 0.7 (0 :: GL.GLfloat) 0.5
     renderPoint (particleX,particleY)
     --renderPoint (particleX+size,particleY)
     --renderPoint (particleX+size,particleY+size)
     --renderPoint (particleX,particleY+size)
     )
     where size = 0.007
+
+renderXYcoloredParticles :: [Particle] -> IO ()
+renderXYcoloredParticles = GL.renderPrimitive GL.Points . mapM_ (\Particle {..} -> do
+    let r = (particleX + 1) / 1.7
+        g = (particleY + 1) / 1.7
+        b = (r + g) / 2
+    GL.color $ GL.Color4 r g b 1
+    renderPoint (particleX,particleY)
+    )
 
 runParticle :: GLFW.Window -> Wire (Timed NominalDiffTime ()) () IO a [Particle] -> IO ()
 runParticle window particleWire = do
@@ -127,7 +136,7 @@ runParticle window particleWire = do
                 Right particles -> do
                     GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
                     GL.clear [GL.ColorBuffer]
-                    renderThrustParticles particles 
+                    renderXYcoloredParticles particles 
                     GL.flush
                     GLFW.swapBuffers window
                     runNetwork sess' wire'
