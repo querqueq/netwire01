@@ -20,7 +20,7 @@ alternateByInhibit w1 w2 = w1 --> w2 --> alternateByInhibit w1 w2
 format x = showFFloat (Just 2) x ""
 
 renderPoint :: (Float, Float) -> IO ()
-renderPoint (x, y) = GL.vertex $ GL.Vertex2 (realToFrac x :: GL.GLfloat) (realToFrac y :: GL.GLfloat)
+renderPoint (x, y) = GL.vertex $ GL.Vertex3 (realToFrac x :: GL.GLfloat) (realToFrac y :: GL.GLfloat) (-100)
 
 rotatePoint :: (Float, Float) -> Float -> (Float, Float) -> (Float, Float)
 rotatePoint (xo,yo) θ (x,y) = (x' * (cos θ) - y' * (sin θ) + xo

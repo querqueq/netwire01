@@ -155,18 +155,6 @@ generatePoints x y s =
     , (x - s2, y + s)
     ] where s2 = s / 4
 
-run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
-run font window inptCtrl = do
-        inpt <- getInput inptCtrl
---        xys <- zip <$> f <*> f
---        let ss = map (\(x,y) -> Star x y 0 1) xys
-        g <- getStdGen
-        runNetwork font window inptCtrl inpt clockSession_ 
-            shipWire 
-            (skyWire g 678) 
-            thrustsWire
-            --(thruster . frontThrusterOrigin . shipWire)
-
 thrustsWire :: (Fractional t, HasTime t s) => InputWire s () [Particle]
 thrustsWire = 
       mconcat 
@@ -177,6 +165,45 @@ thrustsWire =
 
 fromToRational = fromRational . toRational
 
+pairs :: [a] -> [(a,a)]
+pairs [] = []
+pairs (a:(b:cs)) = (a,b) : pairs cs
+
+stars :: (RandomGen g) => g -> Float -> [(Float,Float,Float)]
+stars g range = zipWith (\(x,y) z -> (x,y,z))
+    (pairs $ randomRs (-range,range) g)
+    (randomRs (starNear,starFar/2) g)
+
+starNear = -200
+starFar = -2000
+
+starColor :: Float -> GL.Color3 GL.GLfloat
+starColor depth = GL.Color3 v v v
+    where depth' = abs depth
+          v = (+) 0.1  $ (-) 1 $ normalize (abs starNear,abs starFar) depth'
+          
+renderStar2 :: (Float,Float,Float) -> IO ()
+renderStar2 (x,y,z) = GL.renderPrimitive GL.Points $ do 
+    GL.color $ starColor z
+    GL.vertex $ GL.Vertex3 x y z
+
+normalize (min,max) val = (val - min) / (max - min)
+
+run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
+run font window inptCtrl = do
+        inpt <- getInput inptCtrl
+--        xys <- zip <$> f <*> f
+--        let ss = map (\(x,y) -> Star x y 0 1) xys
+        g <- getStdGen
+        let ss = take 3000 $ stars g 20
+        runNetwork font window inptCtrl inpt clockSession_ 
+            shipWire 
+            --(skyWire g 678) 
+            ss
+            thrustsWire
+            --(thruster . frontThrusterOrigin . shipWire)
+
+
 runNetwork :: (HasTime t s, Fractional t)
                          => FTGL.Font
                          -> GLFW.Window
@@ -184,17 +211,18 @@ runNetwork :: (HasTime t s, Fractional t)
                          -> GLFWInputState
                          -> Session IO s
                          -> InputWire s () Ship
-                         -> Wire s e IO a [Star]
+                         -- -> Wire s e IO a [Star]
+                         -> [(Float,Float,Float)]
                          -> InputWire s () [Particle]
                          -> IO ()
-runNetwork font window inptCtrl inpt session wire sky ft = do
+runNetwork font window inptCtrl inpt session wire ss ft = do
     --GLFW.pollEvents
     inpt' <- pollGLFW inpt inptCtrl
     (st , session') <- stepSession session
     ((ftParticles,ft'),_) <- runGLFWInputT (stepWire ft st $ Right undefined) inpt'
     ((wt', wire'), inpt'') <-
         runGLFWInputT (stepWire wire st $ Right undefined) inpt'
-    (stars, sky') <- stepWire sky st $ Right undefined
+    --(stars, sky') <- stepWire sky st $ Right undefined
     shouldClose <- GLFW.windowShouldClose window
     if shouldClose
     then return ()
@@ -204,13 +232,18 @@ runNetwork font window inptCtrl inpt session wire sky ft = do
             --GL.loadIdentity
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
             GL.clear [GL.ColorBuffer]
+            let d = (-100.333 :: GL.GLfloat)
+            mapM_ renderStar2 ss
             case ftParticles of 
                 Left _ -> return ()
                 Right particles -> renderThrustParticles particles
             FTGL.renderFont font (prettyShow ship) FTGL.Front
+            {--
             case stars of 
                 Left _ -> return ()
                 Right stars -> mapM_ renderStar stars
+                --}
+            GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
             GL.renderPrimitive GL.Quads 
                 $ mapM_ renderPoint 
                 $ map (rotatePoint (posX,posY) dR)
@@ -218,10 +251,11 @@ runNetwork font window inptCtrl inpt session wire sky ft = do
             --GL.preservingMatrix $ do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
+            GL.perspective 1 1 1 100000
             GL.lookAt (GL.Vertex3 (fromToRational posX) (fromToRational posY) 1) (GL.Vertex3 (fromToRational posX) (fromToRational posY) 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
-            runNetwork font window inptCtrl inpt'' session' wire' sky' ft'
+            runNetwork font window inptCtrl inpt'' session' wire' ss ft'
 
 xaccel' :: InputWire s () Float
 xaccel' = (+) <$> leftThrust <*> rightThrust
