@@ -22,7 +22,6 @@ library
                      , containers
                      , OpenGL
                      , GLFW-b
-                     , Hipmunk
                      , StateVar
                      , FTGL
                      , random
@@ -40,7 +39,6 @@ executable netwire01-exe
                      , containers
                      , OpenGL
                      , GLFW-b
-                     , Hipmunk
                      , StateVar
                      , FTGL
                      , random

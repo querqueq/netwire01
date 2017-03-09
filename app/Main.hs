@@ -17,7 +17,6 @@ import Control.Monad hiding (when,unless)
 import Control.Monad.IO.Class
 import Data.IORef
 import Data.StateVar (($=))
---import qualified Physics.Hipmunk as H
 import FRP.Netwire.Input
 import FRP.Netwire.Input.GLFW
 import qualified Graphics.Rendering.FTGL as FTGL
@@ -26,6 +25,24 @@ import System.Random
 import Stars
 import Lib
 import Particles
+
+title :: String
+title = "Netwire 01"
+
+f :: Float
+f = 1.5
+
+s :: Float
+s = 0.02 / f
+
+mainAcceleration :: Float
+mainAcceleration = 0.4 / f
+
+maneuveringAcceleration :: Float
+maneuveringAcceleration = mainAcceleration / 2
+
+rotationalAcceleration :: Float
+rotationalAcceleration = 2
 
 {--
 data GameState = GameState
@@ -47,29 +64,17 @@ data Ship = Ship
     , thrusters :: Thrusters
     } deriving Show
 
-frontThrusterOrigin :: (HasTime t s) => InputWire s Ship (Point,Float,Float)
-frontThrusterOrigin = mkPure_ $ \Ship {thrusters = (Thrusters {thrusterFront = (Thruster {..})}), posX = x, posY = y, dR = r} -> do 
-    Right $ ((x,y),r+(3*pi/2),thrusterThrust)
-
 thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Point,Float,Float)
 thrusterOrigin t = mkPure_ $ \ship@(Ship {..}) -> do 
     Right $ ((posX,posY),(vX,vY),dR+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
 
-thrustersWire :: (HasTime t s) => InputWire s Ship [(Point,Float,Float)]
-thrustersWire = mkPure_ $ \ship -> do
-    Right $ map (thrusterTriple ship) $ allThrusters $ thrusters ship
-
 allThrusters (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
-thrusterTriple (Ship {posX = x, posY = y, dR = r}) (Thruster {..}) =
-    ((x,y),r+(3*pi/2),thrusterThrust)
 
 data Thrusters = Thrusters
     { thrusterFront     :: Thruster
     , thrusterBack      :: Thruster
     , thrusterLeft      :: Thruster
     , thrusterRight     :: Thruster
---    , thrusterRLeft     :: Thruster
---    , thrusterRRight    :: Thruster
     } deriving Show
 
 data Thruster = Thruster
@@ -92,21 +97,6 @@ prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format va
 thrust :: [GLFW.Key] -> Float -> InputWire s () Float
 thrust ks a = pure a . (foldr (<|>) (keyPressed GLFW.Key'Y) $ map keyPressed ks) <|> pure 0
 
-f :: Float
-f = 1.5
-
-s :: Float
-s = 0.02 / f
-
-mainAcceleration :: Float
-mainAcceleration = 0.4 / f
-
-maneuveringAcceleration :: Float
-maneuveringAcceleration = mainAcceleration / 2
-
-rotationalAcceleration :: Float
-rotationalAcceleration = 2
-
 frontThrust         = thrust [GLFW.Key'W,GLFW.Key'Up,GLFW.Key'X] mainAcceleration
 leftThrust          = thrust [GLFW.Key'A,GLFW.Key'Left,GLFW.Key'X] (-maneuveringAcceleration)
 backThrust          = thrust [GLFW.Key'S,GLFW.Key'Down,GLFW.Key'X] (-maneuveringAcceleration)
@@ -114,8 +104,6 @@ rightThrust         = thrust [GLFW.Key'D,GLFW.Key'Right,GLFW.Key'X] maneuveringA
 rotateLeftThrust    = thrust [GLFW.Key'Q] rotationalAcceleration
 rotateRightThrust   = thrust [GLFW.Key'E] (-rotationalAcceleration)
 
-title :: String
-title = "Netwire 01"
 
 shipWire :: (HasTime t s) => InputWire s () Ship
 shipWire = Ship
@@ -133,19 +121,6 @@ shipWire = Ship
                       <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> rightThrust)
                       <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> leftThrust)
            )
-
-
-
-renderThrust :: (Float,Float) -> Float -> Thruster -> IO ()
-renderThrust (x,y) r (Thruster {..}) = if thrusterThrust /= 0 
-    then GL.renderPrimitive GL.Triangles
-            $ mapM_ renderPoint 
-            $ map (rotatePoint (x,y) (r+thrusterOffsetR)) 
-              [(x',y'),(x'-s'/2,y'+s'),(x'+s'/2,y'+s')]
-    else return ()
-    where x' = x + thrusterOffsetX 
-          y' = y + thrusterOffsetY
-          s' = thrusterThrust / 5
 
 generatePoints :: Float -> Float -> Float -> [(Float, Float)]
 generatePoints x y s =
@@ -175,7 +150,7 @@ stars g range = zipWith (\(x,y) z -> (x,y,z))
     (randomRs (starNear,starFar/2) g)
 
 starNear = -200
-starFar = -2000
+starFar = -1000
 
 starColor :: Float -> GL.Color3 GL.GLfloat
 starColor depth = GL.Color3 v v v
@@ -195,7 +170,7 @@ run font window inptCtrl = do
 --        xys <- zip <$> f <*> f
 --        let ss = map (\(x,y) -> Star x y 0 1) xys
         g <- getStdGen
-        let ss = take 3000 $ stars g 20
+        let ss = take 3000 $ stars g 10
         runNetwork font window inptCtrl inpt clockSession_ 
             shipWire 
             --(skyWire g 678) 
@@ -231,7 +206,7 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
         Right ship@(Ship {..}) -> do
             --GL.loadIdentity
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
-            GL.clear [GL.ColorBuffer]
+            GL.clear [GL.ColorBuffer, GL.DepthBuffer]
             let d = (-100.333 :: GL.GLfloat)
             mapM_ renderStar2 ss
             case ftParticles of 
@@ -251,7 +226,7 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
             --GL.preservingMatrix $ do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
-            GL.perspective 1 1 1 100000
+            GL.perspective 1 1 1 3000
             GL.lookAt (GL.Vertex3 (fromToRational posX) (fromToRational posY) 1) (GL.Vertex3 (fromToRational posX) (fromToRational posY) 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
@@ -289,19 +264,14 @@ rxyaccel = (\d (aX,aY) -> rotatePoint (0,0) d (aX,aY)) <$> rdegree' <*> ((,) <$>
 rspeeds' :: HasTime t s => InputWire s () (Float,Float)
 rspeeds' = (,) <$> xspeed' <*> yspeed'
 
-zero :: GL.GLdouble
-zero = 0
-
-vc = GL.Vector3 zero zero zero
-vx = GL.Vertex3 zero zero zero
 
 main = do
     GLFW.init
+    GL.depthFunc $= Just GL.Less
     (Just window) <- GLFW.createWindow 1080 1080 title Nothing Nothing
     GLFW.makeContextCurrent (Just window)
     font <- FTGL.createBitmapFont "DroidSansMono.ttf"
     FTGL.setFontFaceSize font 24 72
     mkInputControl window >>= run font window
-    traceM "Destroying"
     GLFW.destroyWindow window
     GLFW.terminate
