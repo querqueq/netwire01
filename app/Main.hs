@@ -36,7 +36,7 @@ s :: Float
 s = 0.02 / f
 
 mainAcceleration :: Float
-mainAcceleration = 0.4 / f
+mainAcceleration = 0.5 / f
 
 maneuveringAcceleration :: Float
 maneuveringAcceleration = mainAcceleration / 2
@@ -147,7 +147,7 @@ pairs (a:(b:cs)) = (a,b) : pairs cs
 stars :: (RandomGen g) => g -> Float -> [(Float,Float,Float)]
 stars g range = zipWith (\(x,y) z -> (x,y,z))
     (pairs $ randomRs (-range,range) g)
-    (randomRs (starNear,starFar/2) g)
+    (randomRs (starNear,starFar) g)
 
 starNear = -200
 starFar = -1000
@@ -167,10 +167,8 @@ normalize (min,max) val = (val - min) / (max - min)
 run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
 run font window inptCtrl = do
         inpt <- getInput inptCtrl
---        xys <- zip <$> f <*> f
---        let ss = map (\(x,y) -> Star x y 0 1) xys
         g <- getStdGen
-        let ss = take 3000 $ stars g 10
+        let ss = take 3000 $ stars g 20
         runNetwork font window inptCtrl inpt clockSession_ 
             shipWire 
             --(skyWire g 678) 
@@ -204,20 +202,14 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
     else case wt' of
         Left _ -> return ()
         Right ship@(Ship {..}) -> do
-            --GL.loadIdentity
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
-            GL.clear [GL.ColorBuffer, GL.DepthBuffer]
-            let d = (-100.333 :: GL.GLfloat)
+            --GL.clear [GL.ColorBuffer, GL.DepthBuffer]
+            GL.clear [GL.ColorBuffer]
             mapM_ renderStar2 ss
             case ftParticles of 
                 Left _ -> return ()
                 Right particles -> renderThrustParticles particles
             FTGL.renderFont font (prettyShow ship) FTGL.Front
-            {--
-            case stars of 
-                Left _ -> return ()
-                Right stars -> mapM_ renderStar stars
-                --}
             GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
             GL.renderPrimitive GL.Quads 
                 $ mapM_ renderPoint 
