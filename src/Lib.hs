@@ -8,6 +8,7 @@ import Control.Wire.Core
 import Numeric 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
+import Data.List
 
 type InputWire s a b = Wire s () (GLFWInputT IO) a b
 type Point = (Float,Float)
@@ -27,4 +28,8 @@ rotatePoint (xo,yo) θ (x,y) = (x' * (cos θ) - y' * (sin θ) + xo
                               ,y' * (cos θ) + x' * (sin θ) + yo)
     where x' = x - xo
           y' = y - yo
+
+snail :: [[Int]] -> [Int]
+snail [] = []
+snail (xs:xss) = xs ++ (snail . reverse . transpose) xss
 

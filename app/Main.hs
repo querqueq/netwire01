@@ -144,13 +144,35 @@ pairs :: [a] -> [(a,a)]
 pairs [] = []
 pairs (a:(b:cs)) = (a,b) : pairs cs
 
-stars :: (RandomGen g) => g -> Float -> [(Float,Float,Float)]
-stars g range = zipWith (\(x,y) z -> (x,y,z))
+stars :: (RandomGen g) => g -> Point -> Float -> [(Float,Float,Float)]
+stars g (xOffset,yOffset) range = zipWith (\(x,y) z -> (x+xOffset,y+yOffset,z))
     (pairs $ randomRs (-range,range) g)
     (randomRs (starNear,starFar) g)
 
+type Star2 = (Float,Float,Float)
+
+starsAt :: Point -> [Star2]
+starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) [] 
+    [(-r,r ),(0 ,r ),(r ,r )
+    ,(-r,0 ),(0 ,0 ),(r ,0 )
+    ,(-r,-r),(0 ,-r),(r ,-r)
+    ]
+    where r = 4
+
+starsAt' :: Point -> [Star2]
+starsAt' (x,y) = take 100 $ stars (mkStdGen $ truncate $ xmin+ymin) (xmin,ymin) $ fromIntegral range
+    where xmin = f x
+          ymin = f y
+          f = fromIntegral . fst . withinRange range
+          range = 4
+
+withinRange :: Integer -> Float -> (Integer,Integer)
+withinRange j x = (x'-a,x'-a+j)
+    where a = x' `mod` j 
+          x' = truncate x
+
 starNear = -200
-starFar = -1000
+starFar = -500
 
 starColor :: Float -> GL.Color3 GL.GLfloat
 starColor depth = GL.Color3 v v v
@@ -168,7 +190,7 @@ run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
 run font window inptCtrl = do
         inpt <- getInput inptCtrl
         g <- getStdGen
-        let ss = take 3000 $ stars g 20
+        let ss = take 3000 $ stars g (1,1) 1
         runNetwork font window inptCtrl inpt clockSession_ 
             shipWire 
             --(skyWire g 678) 
@@ -205,7 +227,7 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
             --GL.clear [GL.ColorBuffer, GL.DepthBuffer]
             GL.clear [GL.ColorBuffer]
-            mapM_ renderStar2 ss
+            mapM_ renderStar2 $ starsAt (posX,posY)  -- ss
             case ftParticles of 
                 Left _ -> return ()
                 Right particles -> renderThrustParticles particles
