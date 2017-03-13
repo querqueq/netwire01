@@ -25,6 +25,7 @@ import System.Random
 import Stars
 import Lib
 import Particles
+import qualified Data.MemoCombinators as Memo
 
 title :: String
 title = "Netwire 01"
@@ -160,11 +161,11 @@ starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) []
     where r = 4
 
 starsAt' :: Point -> [Star2]
-starsAt' (x,y) = take 100 $ stars (mkStdGen $ truncate $ xmin+ymin) (xmin,ymin) $ fromIntegral range
-    where xmin = f x
-          ymin = f y
-          f = fromIntegral . fst . withinRange range
-          range = 4
+starsAt' (x,y) = hundredStarsAt (f x,f y) where f = fromIntegral . fst . withinRange 4
+
+hundredStarsAt :: (Int,Int) -> [Star2]
+hundredStarsAt = (Memo.pair Memo.integral Memo.integral) f
+    where f (x,y) = take 100 $ stars (mkStdGen $ truncate $ fromIntegral $ x+y) (fromIntegral x,fromIntegral y) 4
 
 withinRange :: Integer -> Float -> (Integer,Integer)
 withinRange j x = (x'-a,x'-a+j)
