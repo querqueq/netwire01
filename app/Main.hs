@@ -22,50 +22,47 @@ import FRP.Netwire.Input.GLFW
 import qualified Graphics.Rendering.FTGL as FTGL
 import Numeric 
 import System.Random
-import Stars
 import Lib
 import Particles
 import qualified Data.MemoCombinators as Memo
 
+
 title :: String
 title = "Netwire 01"
 
-f :: Float
+f :: FT
 f = 1.5
 
-s :: Float
+s :: FT
 s = 0.02 / f
 
-mainAcceleration :: Float
+mainAcceleration :: FT
 mainAcceleration = 0.5 / f
 
-maneuveringAcceleration :: Float
+maneuveringAcceleration :: FT
 maneuveringAcceleration = mainAcceleration / 2
 
-rotationalAcceleration :: Float
+rotationalAcceleration :: FT
 rotationalAcceleration = 2
 
-{--
-data GameState = GameState
+data Frame = GameState
     { playerShip    :: Ship
-    , stars         :: [(Float,Float)]
     } deriving Show
---}
 
 data Ship = Ship
-    { posX      :: Float
-    , posY      :: Float
-    , aX        :: Float
-    , aY        :: Float
-    , vX        :: Float
-    , vY        :: Float
-    , aR        :: Float
-    , vR        :: Float
-    , dR        :: Float
+    { posX      :: FT
+    , posY      :: FT
+    , aX        :: FT
+    , aY        :: FT
+    , vX        :: FT
+    , vY        :: FT
+    , aR        :: FT
+    , vR        :: FT
+    , dR        :: FT
     , thrusters :: Thrusters
     } deriving Show
 
-thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Point,Float,Float)
+thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Point,FT,FT)
 thrusterOrigin t = mkPure_ $ \ship@(Ship {..}) -> do 
     Right $ ((posX,posY),(vX,vY),dR+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
 
@@ -79,10 +76,10 @@ data Thrusters = Thrusters
     } deriving Show
 
 data Thruster = Thruster
-    { thrusterOffsetX   :: Float
-    , thrusterOffsetY   :: Float
-    , thrusterOffsetR   :: Float
-    , thrusterThrust    :: Float
+    { thrusterOffsetX   :: FT
+    , thrusterOffsetY   :: FT
+    , thrusterOffsetR   :: FT
+    , thrusterThrust    :: FT
     } deriving Show
 
 prettyShow :: Ship -> String
@@ -90,12 +87,14 @@ prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format va
     [("X", posX, "")
     ,("Y", posY, "")
     ,("Rotation", dR * 180 / pi, "°")
-    ,("Y-Thrust", aY, "")
-    ,("X-Thrust", aX, "")
-    ,("R-Thrust", aR, "")
+    ,("X-Speed", vX, "")
+    ,("Y-Speed", vY, "")
+    --,("Y-Thrust", aY, "")
+    --,("X-Thrust", aX, "")
+    --,("R-Thrust", aR, "")
     ]
 
-thrust :: [GLFW.Key] -> Float -> InputWire s () Float
+thrust :: [GLFW.Key] -> FT -> InputWire s () FT
 thrust ks a = pure a . (foldr (<|>) (keyPressed GLFW.Key'Y) $ map keyPressed ks) <|> pure 0
 
 frontThrust         = thrust [GLFW.Key'W,GLFW.Key'Up,GLFW.Key'X] mainAcceleration
@@ -123,7 +122,7 @@ shipWire = Ship
                       <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> leftThrust)
            )
 
-generatePoints :: Float -> Float -> Float -> [(Float, Float)]
+generatePoints :: FT -> FT -> FT -> [(FT, FT)]
 generatePoints x y s =
     [ (x - s, y - s)
     , (x + s, y - s)
@@ -145,12 +144,12 @@ pairs :: [a] -> [(a,a)]
 pairs [] = []
 pairs (a:(b:cs)) = (a,b) : pairs cs
 
-stars :: (RandomGen g) => g -> Point -> Float -> [(Float,Float,Float)]
+stars :: (RandomGen g) => g -> Point -> FT -> [Star2]
 stars g (xOffset,yOffset) range = zipWith (\(x,y) z -> (x+xOffset,y+yOffset,z))
     (pairs $ randomRs (-range,range) g)
     (randomRs (starNear,starFar) g)
 
-type Star2 = (Float,Float,Float)
+type Star2 = (FT,FT,FT)
 
 starsAt :: Point -> [Star2]
 starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) [] 
@@ -165,22 +164,24 @@ starsAt' (x,y) = hundredStarsAt (f x,f y) where f = fromIntegral . fst . withinR
 
 hundredStarsAt :: (Int,Int) -> [Star2]
 hundredStarsAt = (Memo.pair Memo.integral Memo.integral) f
-    where f (x,y) = take 100 $ stars (mkStdGen $ truncate $ fromIntegral $ x+y) (fromIntegral x,fromIntegral y) 4
+    where f (x,y) = take 111 $ stars (mkStdGen $ truncate $ fromIntegral $ x+y) (fromIntegral x,fromIntegral y) 4
 
-withinRange :: Integer -> Float -> (Integer,Integer)
+withinRange :: Integer -> FT -> (Integer,Integer)
 withinRange j x = (x'-a,x'-a+j)
     where a = x' `mod` j 
           x' = truncate x
 
+starNear :: FT
 starNear = -200
+starFar :: FT
 starFar = -500
 
-starColor :: Float -> GL.Color3 GL.GLfloat
+starColor :: FT -> GL.Color3 FT
 starColor depth = GL.Color3 v v v
     where depth' = abs depth
           v = (+) 0.1  $ (-) 1 $ normalize (abs starNear,abs starFar) depth'
           
-renderStar2 :: (Float,Float,Float) -> IO ()
+renderStar2 :: (FT,FT,FT) -> IO ()
 renderStar2 (x,y,z) = GL.renderPrimitive GL.Points $ do 
     GL.color $ starColor z
     GL.vertex $ GL.Vertex3 x y z
@@ -191,13 +192,9 @@ run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
 run font window inptCtrl = do
         inpt <- getInput inptCtrl
         g <- getStdGen
-        let ss = take 3000 $ stars g (1,1) 1
         runNetwork font window inptCtrl inpt clockSession_ 
             shipWire 
-            --(skyWire g 678) 
-            ss
             thrustsWire
-            --(thruster . frontThrusterOrigin . shipWire)
 
 
 runNetwork :: (HasTime t s, Fractional t)
@@ -207,18 +204,15 @@ runNetwork :: (HasTime t s, Fractional t)
                          -> GLFWInputState
                          -> Session IO s
                          -> InputWire s () Ship
-                         -- -> Wire s e IO a [Star]
-                         -> [(Float,Float,Float)]
                          -> InputWire s () [Particle]
                          -> IO ()
-runNetwork font window inptCtrl inpt session wire ss ft = do
+runNetwork font window inptCtrl inpt session wire ft = do
     --GLFW.pollEvents
     inpt' <- pollGLFW inpt inptCtrl
     (st , session') <- stepSession session
     ((ftParticles,ft'),_) <- runGLFWInputT (stepWire ft st $ Right undefined) inpt'
     ((wt', wire'), inpt'') <-
         runGLFWInputT (stepWire wire st $ Right undefined) inpt'
-    --(stars, sky') <- stepWire sky st $ Right undefined
     shouldClose <- GLFW.windowShouldClose window
     if shouldClose
     then return ()
@@ -228,7 +222,7 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
             --GL.clear [GL.ColorBuffer, GL.DepthBuffer]
             GL.clear [GL.ColorBuffer]
-            mapM_ renderStar2 $ starsAt (posX,posY)  -- ss
+            mapM_ renderStar2 $ starsAt (posX,posY)
             case ftParticles of 
                 Left _ -> return ()
                 Right particles -> renderThrustParticles particles
@@ -242,41 +236,43 @@ runNetwork font window inptCtrl inpt session wire ss ft = do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
             GL.perspective 1 1 1 3000
-            GL.lookAt (GL.Vertex3 (fromToRational posX) (fromToRational posY) 1) (GL.Vertex3 (fromToRational posX) (fromToRational posY) 0) (GL.Vector3 0 1 0)
+            let camX = posX
+                camY = posY
+            GL.lookAt (GL.Vertex3 camX camY 1) (GL.Vertex3 camX camY 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
-            runNetwork font window inptCtrl inpt'' session' wire' ss ft'
+            runNetwork font window inptCtrl inpt'' session' wire' ft'
 
-xaccel' :: InputWire s () Float
+xaccel' :: InputWire s () FT
 xaccel' = (+) <$> leftThrust <*> rightThrust
 
-xspeed' :: HasTime t s => InputWire s () Float
+xspeed' :: HasTime t s => InputWire s () FT
 xspeed' = integral 0 . (fst <$> rxyaccel)
 
-yaccel' :: InputWire s () Float
+yaccel' :: InputWire s () FT
 yaccel' = (+) <$> frontThrust <*> backThrust
 
-yspeed' :: HasTime t s => InputWire s () Float
+yspeed' :: HasTime t s => InputWire s () FT
 yspeed' = integral 0 . (snd <$> rxyaccel)
 
-raccel' :: InputWire s () Float
+raccel' :: InputWire s () FT
 raccel' = (+) <$> rotateLeftThrust <*> rotateRightThrust
 
-rspeed' :: HasTime t s => InputWire s () Float
+rspeed' :: HasTime t s => InputWire s () FT
 rspeed' = integral 0 . raccel'
 
-rdegree' :: HasTime t s => InputWire s () Float
+rdegree' :: HasTime t s => InputWire s () FT
 rdegree' = (`mod'` (2*pi)) <$> integral 0 . raccel'
 
---negateInertia :: Monoid e => Wire s e IO () Float
+--negateInertia :: Monoid e => Wire s e IO () FT
 
-pos :: HasTime t s => InputWire s () (Float, Float)
+pos :: HasTime t s => InputWire s () (FT, FT)
 pos = (,) <$> integral 0 . (fst <$> rspeeds') <*> integral 0 . (snd <$> rspeeds')
 
-rxyaccel :: HasTime t s => InputWire s () (Float, Float)
+rxyaccel :: HasTime t s => InputWire s () (FT, FT)
 rxyaccel = (\d (aX,aY) -> rotatePoint (0,0) d (aX,aY)) <$> rdegree' <*> ((,) <$> xaccel' <*> yaccel')
 
-rspeeds' :: HasTime t s => InputWire s () (Float,Float)
+rspeeds' :: HasTime t s => InputWire s () (FT,FT)
 rspeeds' = (,) <$> xspeed' <*> yspeed'
 
 

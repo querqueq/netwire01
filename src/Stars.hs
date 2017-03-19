@@ -14,10 +14,10 @@ import Numeric
 import Lib
 
 data Star = Star 
-    { starX :: Float
-    , starY :: Float
-    , starZ :: Float
-    , starBrightness :: !Float
+    { starX :: FT
+    , starY :: FT
+    , starZ :: FT
+    , starBrightness :: !FT
     } 
 
 instance Show Star where
@@ -28,7 +28,7 @@ skyWire g starsN = do
     let xys = zip (take starsN rands) (drop starsN rands)
     let gs = map mkStdGen $ randoms g
     sequenceA $ zipWith pulsarWire gs xys
-    where rands = take (starsN * 2) $ randomRs (-1 :: Float,1) g
+    where rands = take (starsN * 2) $ randomRs (-1 :: FT,1) g
 
 starPosWire :: Point -> Wire s e m a Point
 starPosWire pos = WConst $ Right pos
@@ -48,7 +48,7 @@ pulsarWire g (x,y) = Star
                peak = fst $ randomR (0.005,0.025) g -- 0.01
                pulsateT = 2.5
 
-pulsateWire :: (Fractional t, Monad m, HasTime t s) => Float -> Float -> t -> t -> Wire s () m a Float
+pulsateWire :: (Fractional t, Monad m, HasTime t s) => FT -> FT -> t -> t -> Wire s () m a FT
 pulsateWire base peak totalT holdT = for totalT . integral base .
     (   for changeT . integral target . pure (-target)
     --> for holdT . pure 0 

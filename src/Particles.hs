@@ -18,17 +18,17 @@ import Debug.Trace
 import Data.Either (rights,isRight)
 
 data Particle = Particle
-    { particleX  :: Float
-    , particleY  :: Float
-    , particleV  :: Float
+    { particleX  :: FT
+    , particleY  :: FT
+    , particleV  :: FT
     } deriving Show
 
-swirlUp :: (HasTime t s, Monad m) => (Float,Float) -> Wire s () m a (Point,Point,Float,Float)
+swirlUp :: (HasTime t s, Monad m) => (FT,FT) -> Wire s () m a (Point,Point,FT,FT)
 swirlUp (x,y) = (,,,) <$> pos <*> pure (0,0) <*> r <*> pure 0.5
     where pos = (,) <$> ((/4) . sin <$> integral x . pure (pi/2)) <*> integral y . pure 0.4
           r = -pi/2
 
-circling :: (HasTime t s, Monad m) => Float -> Wire s () m a (Point,Point,Float,Float)
+circling :: (HasTime t s, Monad m) => FT -> Wire s () m a (Point,Point,FT,FT)
 circling raccel = (\r' pos'@(x,y) v -> (rotatePoint (0,0) r' pos',(0,0),r',v)) <$> r <*> pos <*> pure 0.5
     where r = integral 0 . pure raccel
           pos = (,) <$> 0 <*> (-0.8)
@@ -38,7 +38,7 @@ circling raccel = (\r' pos'@(x,y) v -> (rotatePoint (0,0) r' pos',(0,0),r',v)) <
 testFlyCircle = testParticle $ thruster . circling (-1)
 testFlyUp = testParticle $ thruster . swirlUp (0,-1)
 
-explosion :: (HasTime t s, Fractional t, Monad m) => Float -> Float -> Wire s () m a Float
+explosion :: (HasTime t s, Fractional t, Monad m) => FT -> FT -> Wire s () m a FT
 explosion speed accel = when (if accel > 0 then (<0) else (>0)) . integral speed . pure accel --> for 0.3 . pure 1000 --> pure 0
                                                                  -- FIXME replace workaround with inhibit
                                                                  -- and findout how to remove inhibted
@@ -46,28 +46,28 @@ explosion speed accel = when (if accel > 0 then (<0) else (>0)) . integral speed
 
 --braking :: (HasTime t s, Fractional t, Monad m) => Point -> Point -> Wire s () m a Point
                                                 
-thrustParticleSpeed :: (HasTime t s, Fractional t, Monad m) => Float -> Wire s () m a Float
+thrustParticleSpeed :: (HasTime t s, Fractional t, Monad m) => FT -> Wire s () m a FT
 thrustParticleSpeed v = pure v--explosion v (-v*2)
 
-randDelayWiresWith :: (Fractional t, HasTime t s, Monoid e, Monad m) => (Float,Float) -> Wire s e m a b -> [Wire s e m a b] -> [Wire s e m a b]
+randDelayWiresWith :: (Fractional t, HasTime t s, Monoid e, Monad m) => (FT,FT) -> Wire s e m a b -> [Wire s e m a b] -> [Wire s e m a b]
 randDelayWiresWith (f,t) placeholder wires = zipWith 
     (\w t -> for t . placeholder --> w) 
     wires 
     $ map (fromRational . toRational) $ randomRs (f,t) $ mkStdGen 3
 
---particles :: (HasTime t s, Monad m) => (Float, Float) -> Float -> Float -> Wire s () m a [Point]
+--particles :: (HasTime t s, Monad m) => (FT, FT) -> FT -> FT -> Wire s () m a [Point]
 --particles origin speed accel = sequenceA $ map (particle origin $ explosion speed accel) [0..360]
 
-thruster :: (HasTime t s, Monad m, Fractional t) => Wire s () m (Point,Point,Float,Float) [Particle]
+thruster :: (HasTime t s, Monad m, Fractional t) => Wire s () m (Point,Point,FT,FT) [Particle]
 thruster = expel 3 0.3 (mkStdGen 12) thrustParticleSpeed []
 
 expel :: (HasTime t s, Monad m, Fractional t, RandomGen g) 
                 => Int 
-                -> Float
+                -> FT
                 -> g 
-                -> (Float -> Wire s () m a Float) 
+                -> (FT -> Wire s () m a FT) 
                 -> [Wire s () m a Particle]
-                -> Wire s () m (Point,Point,Float,Float) [Particle]
+                -> Wire s () m (Point,Point,FT,FT) [Particle]
 expel newN angleMax seeder speedWire particleWires = mkGen $ \ds (origin,speed,r,a) -> do
     let (angleSeed,g') = random seeder
         angles = take newN $ randomRs (-angleMax,angleMax) $ mkStdGen angleSeed 
@@ -85,11 +85,11 @@ thruster origin speed r =
     where n = 567 -- truncate $ 1000 * speed
           ds = take n $ randomRs (speed-speed/10,speed+speed/10) $ mkStdGen 9
 --}
-particleCone :: (HasTime t s, Monad m) => (Float, Float) -> [Wire s () m a Float] -> Float -> Float -> Wire s () m a [Particle]
+particleCone :: (HasTime t s, Monad m) => (FT, FT) -> [Wire s () m a FT] -> FT -> FT -> Wire s () m a [Particle]
 particleCone origin speedWires offsetR r = sequenceA $ zipWith (particle origin (0,0)) speedWires $ randomRs range (mkStdGen 1)
     where range = (offsetR-r/2,offsetR+r/2)
 
-particle :: (HasTime t s, Monad m) => (Float, Float) -> (Float,Float) -> Wire s () m a Float -> Float -> Wire s () m a Particle
+particle :: (HasTime t s, Monad m) => (FT, FT) -> (FT,FT) -> Wire s () m a FT -> FT -> Wire s () m a Particle
 particle (x,y) (vX,vY) speedWire r = Particle <$> posX <*> posY <*> speedWire
     where vs   = (\(vX',vY') -> (vX+vX',vY+vY')) . (\d -> rotatePoint (0,0) r (d, 0)) <$> speedWire
           posX = integral x . (fst <$> vs)
