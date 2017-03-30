@@ -45,9 +45,17 @@ maneuveringAcceleration = mainAcceleration / 2
 rotationalAcceleration :: FT
 rotationalAcceleration = 2
 
-data Frame = GameState
+data Frame = Frame
     { playerShip    :: Ship
+    , playerThrust  :: [Particle]
+    , cam           :: Point
     } deriving Show
+
+frameWire :: (HasTime t s, Fractional t) => InputWire s () Frame
+frameWire = Frame 
+        <$> shipWire 
+        <*> thrustsWire
+        <*> ((\(Ship {..}) -> (posX,posY)) <$> shipWire)
 
 data Ship = Ship
     { posX      :: FT
@@ -192,10 +200,7 @@ run :: FTGL.Font -> GLFW.Window -> GLFWInputControl -> IO ()
 run font window inptCtrl = do
         inpt <- getInput inptCtrl
         g <- getStdGen
-        runNetwork font window inptCtrl inpt clockSession_ 
-            shipWire 
-            thrustsWire
-
+        runNetwork font window inptCtrl inpt clockSession_ frameWire
 
 runNetwork :: (HasTime t s, Fractional t)
                          => FTGL.Font
@@ -203,29 +208,26 @@ runNetwork :: (HasTime t s, Fractional t)
                          -> GLFWInputControl
                          -> GLFWInputState
                          -> Session IO s
-                         -> InputWire s () Ship
-                         -> InputWire s () [Particle]
+                         -> InputWire s () Frame
                          -> IO ()
-runNetwork font window inptCtrl inpt session wire ft = do
+runNetwork font window inptCtrl inpt session wire = do
     --GLFW.pollEvents
     inpt' <- pollGLFW inpt inptCtrl
     (st , session') <- stepSession session
-    ((ftParticles,ft'),_) <- runGLFWInputT (stepWire ft st $ Right undefined) inpt'
-    ((wt', wire'), inpt'') <-
-        runGLFWInputT (stepWire wire st $ Right undefined) inpt'
+    ((wt', wire'), inpt'') <- runGLFWInputT (stepWire wire st $ Right undefined) inpt'
     shouldClose <- GLFW.windowShouldClose window
     if shouldClose
     then return ()
     else case wt' of
         Left _ -> return ()
-        Right ship@(Ship {..}) -> do
+        Right (Frame { playerShip = ship@(Ship {..}), cam = cam, playerThrust = particles }) -> do
+            let camX = fst cam
+                camY = snd cam
             GL.clearColor GL.$= GL.Color4 0.0 0.0 0.0 1
             --GL.clear [GL.ColorBuffer, GL.DepthBuffer]
             GL.clear [GL.ColorBuffer]
             mapM_ renderStar2 $ starsAt (posX,posY)
-            case ftParticles of 
-                Left _ -> return ()
-                Right particles -> renderThrustParticles particles
+            renderThrustParticles particles
             FTGL.renderFont font (prettyShow ship) FTGL.Front
             GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
             GL.renderPrimitive GL.Quads 
@@ -236,12 +238,10 @@ runNetwork font window inptCtrl inpt session wire ft = do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
             GL.perspective 1 1 1 3000
-            let camX = posX
-                camY = posY
             GL.lookAt (GL.Vertex3 camX camY 1) (GL.Vertex3 camX camY 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
-            runNetwork font window inptCtrl inpt'' session' wire' ft'
+            runNetwork font window inptCtrl inpt'' session' wire'
 
 xaccel' :: InputWire s () FT
 xaccel' = (+) <$> leftThrust <*> rightThrust
