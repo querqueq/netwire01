@@ -238,7 +238,7 @@ runNetwork font window inptCtrl inpt session wire = do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
             GL.perspective 1 1 1 3000
-            GL.lookAt (GL.Vertex3 camX camY 1) (GL.Vertex3 camX camY 0) (GL.Vector3 0 1 0)
+            GL.lookAt (GL.Vertex3 camX camY $ sqrt $ (*10000) $ (abs vX) + (abs vY) + 0.01) (GL.Vertex3 camX camY 0) (GL.Vector3 0 1 0)
             GL.flush
             GLFW.swapBuffers window
             runNetwork font window inptCtrl inpt'' session' wire'
