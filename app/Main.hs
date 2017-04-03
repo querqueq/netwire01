@@ -148,10 +148,6 @@ thrustsWire =
 
 fromToRational = fromRational . toRational
 
-pairs :: [a] -> [(a,a)]
-pairs [] = []
-pairs (a:(b:cs)) = (a,b) : pairs cs
-
 stars :: (RandomGen g) => g -> Point -> FT -> [Star2]
 stars g (xOffset,yOffset) range = zipWith (\(x,y) z -> (x+xOffset,y+yOffset,z))
     (pairs $ randomRs (-range,range) g)
@@ -230,10 +226,18 @@ runNetwork font window inptCtrl inpt session wire = do
             renderThrustParticles particles
             FTGL.renderFont font (prettyShow ship) FTGL.Front
             GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
+            {-- old ship
             GL.renderPrimitive GL.Quads 
                 $ mapM_ renderPoint 
                 $ map (rotatePoint (posX,posY) dR)
                 $ generatePoints posX posY s
+            --}
+            GL.renderPrimitive GL.Polygon 
+                $ mapM_ renderPoint
+                $ map (rotatePoint (posX,posY) dR)
+                $ map (move (posX,posY))
+                $ stretch (1.05,1.95)
+                $ nGon 0.02 7
             --GL.preservingMatrix $ do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity

@@ -9,10 +9,39 @@ import Numeric
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import Data.List
+import System.Random
 
 type FT = GL.GLdouble
 type InputWire s a b = Wire s () (GLFWInputT IO) a b
 type Point = (FT,FT)
+
+type Polygon = [Point]
+
+nGon :: FT -> Int -> Polygon
+nGon r n = take n $ spin (0,r)
+    where a = (2/(fromIntegral n)) * pi
+          spin p = p : spin (rotatePoint (0,0) a p)
+
+move :: Point -> Point -> Point
+move (xo,yo) (x,y) = (xo+x,yo+y)
+
+stretch :: Point -> Polygon -> Polygon
+stretch (sx,sy) = map (\(x,y) -> (x*sx,y*sy))
+
+dent :: Point -> Polygon -> Polygon
+dent d@(x,y) p = undefined
+
+pairs [] = []
+pairs (x:[]) = error "Missing an element for pairs"
+pairs (x':(x'':xs)) = (x',x'') : pairs xs
+
+randomRTuples bounds g = pairs $ randomRs bounds g 
+
+comet :: RandomGen g => g -> FT -> Int -> Polygon
+comet g r n = 
+      (\p -> foldr dent p $ take (n `div` 3) $ randomRTuples (-r,r) g)
+    $ stretch (head $ randomRTuples (0.9,1.2) g)
+    $ nGon r (n `div` 3 * 2)
 
 mapTuple :: (a -> b) -> (a,a) -> (b,b)
 mapTuple f (x,y) = (f x,f y)
