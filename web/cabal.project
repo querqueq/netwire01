@@ -1,1 +1,6 @@
 packages: .
+
+-- netwire (5.0.3, 2016) and parts of its dependency tree carry tight upper
+-- version bounds that exclude the modern GHC shipped with the JS backend.
+-- Relax them; the code itself is pure and builds fine.
+allow-newer: all

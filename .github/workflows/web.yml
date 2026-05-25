@@ -44,8 +44,9 @@ jobs:
         with:
           path: |
             ~/.ghcup
-            ~/.cabal/store
-            ~/.local/state/cabal/store
+            ~/.cabal
+            ~/.local/state/cabal
+            ~/.cache/cabal
             web/dist-newstyle
           key: ${{ runner.os }}-ghcjs-${{ env.GHCJS_VERSION }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project') }}
           restore-keys: |
@@ -56,6 +57,9 @@ jobs:
           ghcup config add-release-channel https://raw.githubusercontent.com/haskell/ghcup-metadata/develop/ghcup-cross-0.0.8.yaml
           emconfigure ghcup install ghc --set "$GHCJS_VERSION"
           javascript-unknown-ghcjs-ghc --version
+
+      - name: Update package index
+        run: cabal update
 
       - name: Build (JavaScript backend)
         working-directory: web
