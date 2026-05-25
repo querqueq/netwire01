@@ -9,5 +9,6 @@ executable netwire01-web
   hs-source-dirs:   .
   build-depends:    base
                   , netwire
+                  , random
   default-language: Haskell2010
   ghc-options:      -O2
