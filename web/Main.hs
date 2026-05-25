@@ -27,9 +27,10 @@ foreign import javascript unsafe "((f) => { globalThis.requestAnimationFrame(f);
 foreign import javascript unsafe "((s) => { globalThis.setStars(s); })"
   js_setStars :: JSVal -> IO ()
 
--- Render a frame: camera position (world) + the rocket polygon (camera space).
-foreign import javascript unsafe "((cx,cy,s) => { globalThis.drawFrame(cx,cy,s); })"
-  js_drawFrame :: Double -> Double -> JSVal -> IO ()
+-- Render a frame: camera position (world) + rocket polygon + exhaust
+-- particles (both in camera space).
+foreign import javascript unsafe "((cx,cy,r,p) => { globalThis.drawFrame(cx,cy,r,p); })"
+  js_drawFrame :: Double -> Double -> JSVal -> JSVal -> IO ()
 
 foreign import javascript unsafe "(() => { return globalThis.performance.now(); })"
   jsNow :: IO Double
@@ -131,6 +132,45 @@ stars n = take n (go (mkStdGen 42))
                (b, g3) = randomR (0.2, 1.0) g2
            in (x, y, b) : go g3
 
+-- Exhaust particles -----------------------------------------------------------
+
+-- A simplified port of the desktop thruster exhaust (Particles.hs): when the
+-- ship thrusts, a cone of particles is emitted from its tail (opposite the
+-- thrust direction); they drift in world space and fade out. Simulated
+-- directly in the loop rather than via netwire's expel wire-list.
+data Particle = Particle
+  { pX, pY, pVX, pVY, pLife :: !Double }
+
+particleMaxLife :: Double
+particleMaxLife = 0.5
+
+particleSpeed :: Double
+particleSpeed = 0.6
+
+particleSpread :: Double
+particleSpread = 0.4
+
+particlesPerFrame :: Int
+particlesPerFrame = 3
+
+stepParticles :: Double -> [Particle] -> [Particle]
+stepParticles dt = filter ((> 0) . pLife) . map move
+  where
+    move p = p { pX    = pX p + pVX p * dt
+               , pY    = pY p + pVY p * dt
+               , pLife = pLife p - dt }
+
+-- Emit n particles from `origin`, travelling around `dir` (radians).
+emit :: Int -> Point -> Double -> StdGen -> ([Particle], StdGen)
+emit 0 _ _ g = ([], g)
+emit n origin@(ox, oy) dir g =
+    let (da, g1)  = randomR (negate particleSpread, particleSpread) g
+        (sp, g2)  = randomR (particleSpeed * 0.7, particleSpeed * 1.3) g1
+        ang       = dir + da
+        p         = Particle ox oy (cos ang * sp) (sin ang * sp) particleMaxLife
+        (ps, g3)  = emit (n - 1) origin dir g2
+    in (p : ps, g3)
+
 -- Marshalling -----------------------------------------------------------------
 
 polyToString :: [Point] -> String
@@ -138,6 +178,13 @@ polyToString = intercalate ";" . map (\(x, y) -> show x ++ "," ++ show y)
 
 starsToString :: [(Double, Double, Double)] -> String
 starsToString = intercalate ";" . map (\(x, y, b) -> show x ++ "," ++ show y ++ "," ++ show b)
+
+-- Particles in camera space, with alpha from remaining life.
+particlesToString :: Point -> [Particle] -> String
+particlesToString (camX, camY) =
+    intercalate ";"
+  . map (\p -> show (pX p - camX) ++ "," ++ show (pY p - camY)
+            ++ "," ++ show (pLife p / particleMaxLife))
 
 -- Main loop -------------------------------------------------------------------
 
@@ -147,6 +194,8 @@ main = do
   t0      <- jsNow
   prevRef <- newIORef t0
   wireRef <- newIORef shipWire
+  partRef <- newIORef []
+  genRef  <- newIORef (mkStdGen 1)
   cbRef   <- newIORef (error "callback not yet initialised")
   cb <- syncCallback ContinueAsync $ do
     now  <- jsNow
@@ -155,11 +204,28 @@ main = do
     let dt = (now - prev) / 1000
     bits <- jsControlBits
     wire <- readIORef wireRef
-    (result, wire') <- stepWire wire (Timed dt ()) (Right (decodeControls bits))
+    let ctrl@(_, xacc, yacc) = decodeControls bits
+    (result, wire') <- stepWire wire (Timed dt ()) (Right ctrl)
     writeIORef wireRef wire'
     case result of
-      Right (px, py, heading, _vx, _vy) ->
-        js_drawFrame px py (toJSString (polyToString (rocket heading)))
+      Right (px, py, heading, _vx, _vy) -> do
+        existing <- stepParticles dt <$> readIORef partRef
+        -- Emit exhaust from the tail, opposite the (heading-relative) thrust.
+        emitted <-
+          if xacc /= 0 || yacc /= 0
+            then do
+              let (wx, wy)   = rotatePoint (0, 0) heading (xacc, yacc)
+                  exhaustDir = atan2 (negate wy) (negate wx)
+              g <- readIORef genRef
+              let (ps, g') = emit particlesPerFrame (px, py) exhaustDir g
+              writeIORef genRef g'
+              pure ps
+            else pure []
+        let parts = emitted ++ existing
+        writeIORef partRef parts
+        js_drawFrame px py
+          (toJSString (polyToString (rocket heading)))
+          (toJSString (particlesToString (px, py) parts))
       Left _ -> pure ()
     readIORef cbRef >>= requestAnimationFrame
   writeIORef cbRef cb
