@@ -65,3 +65,16 @@ jobs:
 
       - name: Build
         run: stack --no-terminal build
+
+      - name: Collect binary
+        run: |
+          mkdir -p artifact
+          cp "$(stack --no-terminal path --local-install-root)/bin/netwire01-exe" artifact/
+          cp DroidSansMono.ttf artifact/
+          ls -la artifact
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netwire01-linux-x64
+          path: artifact

@@ -1,0 +1,102 @@
+name: Web build (GHC JS backend)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Permissions required to deploy to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent Pages deployment; don't cancel an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: 3.1.57
+  GHCJS_VERSION: javascript-unknown-ghcjs-9.10.0.20240413
+
+jobs:
+  build:
+    name: cabal build (JavaScript backend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+
+      - name: Tool versions
+        run: |
+          emcc --version
+          ghcup --version
+          cabal --version
+
+      - name: Cache GHCup / cabal store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghcup
+            ~/.cabal/store
+            ~/.local/state/cabal/store
+            web/dist-newstyle
+          key: ${{ runner.os }}-ghcjs-${{ env.GHCJS_VERSION }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project') }}
+          restore-keys: |
+            ${{ runner.os }}-ghcjs-${{ env.GHCJS_VERSION }}-
+
+      - name: Install GHC JavaScript backend
+        run: |
+          ghcup config add-release-channel https://raw.githubusercontent.com/haskell/ghcup-metadata/develop/ghcup-cross-0.0.8.yaml
+          emconfigure ghcup install ghc --set "$GHCJS_VERSION"
+          javascript-unknown-ghcjs-ghc --version
+
+      - name: Build (JavaScript backend)
+        working-directory: web
+        run: |
+          cabal build \
+            --with-compiler=javascript-unknown-ghcjs-ghc \
+            --with-hc-pkg=javascript-unknown-ghcjs-ghc-pkg
+          echo "--- produced all.js files ---"
+          find dist-newstyle -name all.js
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp web/index.html _site/index.html
+          ALL_JS="$(find web/dist-newstyle -name all.js | head -n1)"
+          echo "Using: $ALL_JS"
+          cp "$ALL_JS" _site/all.js
+          ls -la _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netwire01-web
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # Only the default branch may deploy to the github-pages environment;
+    # PRs and feature branches build but do not publish.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
