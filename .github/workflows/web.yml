@@ -89,6 +89,9 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    # Only the default branch may deploy to the github-pages environment;
+    # PRs and feature branches build but do not publish.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
