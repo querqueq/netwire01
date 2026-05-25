@@ -1,0 +1,67 @@
+name: Build (x64 Linux)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: stack build (lts-8.0 / GHC 8.0.2)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          # libtinfo5/libncurses5: required by the GHC 8.0.2 bindist used by lts-8.0
+          # ftgl-dev: FTGL text rendering
+          # libxxf86vm-dev + X11 dev libs: needed to build GLFW-b's bundled GLFW
+          # mesa GL/GLU: OpenGL / GLU
+          sudo apt-get install -y --no-install-recommends \
+            libgmp-dev \
+            libtinfo5 \
+            libncurses5 \
+            libftgl-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxxf86vm-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxinerama-dev
+
+      - name: Cache Stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml', 'netwire01.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Set up Stack
+        # Pin Stack to 2.15.3: newer Stack drops support for the Cabal version
+        # (1.24) bundled with GHC 8.0.2, which the lts-8.0 resolver requires.
+        env:
+          STACK_VERSION: 2.15.3
+        run: |
+          mkdir -p ~/.local/bin
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSL "https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/stack-${STACK_VERSION}-linux-x86_64.tar.gz" \
+            | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+          ~/.local/bin/stack --version
+
+      - name: Install GHC
+        run: stack --no-terminal setup --install-ghc
+
+      - name: Build dependencies
+        run: stack --no-terminal build --only-dependencies
+
+      - name: Build
+        run: stack --no-terminal build
