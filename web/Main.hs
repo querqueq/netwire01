@@ -8,7 +8,7 @@
 module Main where
 
 import Data.IORef
-import GHC.JS.Foreign.Callback (Callback, asyncCallback)
+import GHC.JS.Foreign.Callback (Callback, syncCallback, OnBlocked(ContinueAsync))
 
 foreign import javascript unsafe "((f) => { globalThis.requestAnimationFrame(f); })"
   requestAnimationFrame :: Callback (IO ()) -> IO ()
@@ -24,7 +24,7 @@ main :: IO ()
 main = do
   angleRef <- newIORef 0
   cbRef    <- newIORef (error "callback not yet initialised")
-  cb <- asyncCallback $ do
+  cb <- syncCallback ContinueAsync $ do
     angle <- (+ step) <$> readIORef angleRef
     writeIORef angleRef angle
     drawScene angle
