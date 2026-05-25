@@ -46,10 +46,16 @@ jobs:
             ${{ runner.os }}-stack-
 
       - name: Set up Stack
+        # Pin Stack to 2.15.3: newer Stack drops support for the Cabal version
+        # (1.24) bundled with GHC 8.0.2, which the lts-8.0 resolver requires.
+        env:
+          STACK_VERSION: 2.15.3
         run: |
           mkdir -p ~/.local/bin
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          curl -sSL https://get.haskellstack.org/ | sh -s - -d ~/.local/bin
+          curl -sSL "https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/stack-${STACK_VERSION}-linux-x86_64.tar.gz" \
+            | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+          ~/.local/bin/stack --version
 
       - name: Install GHC
         run: stack --no-terminal setup --install-ghc
