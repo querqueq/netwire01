@@ -1,0 +1,63 @@
+name: Build (x64 Windows)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: stack build (lts-8.0 / GHC 8.0.2)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Stack 2.15.3: newer Stack rejects the Cabal version (1.24) bundled with
+      # GHC 8.0.2, which the lts-8.0 resolver requires (error S-5973).
+      - name: Set up Stack
+        uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-version: '2.15.3'
+          stack-no-global: true
+
+      - name: Cache Stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Roaming\stack
+            ~\AppData\Local\Programs\stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml', 'netwire01.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Install GHC (and Stack's MSYS2)
+        run: stack --no-terminal setup --install-ghc
+
+      # The native app needs FTGL (text) and FreeType. GLFW-b and OpenGL link
+      # against Windows system libraries (opengl32/glu32/gdi32) already present.
+      - name: Install MSYS2 system libraries
+        run: |
+          stack --no-terminal exec -- pacman -Sy --noconfirm
+          stack --no-terminal exec -- pacman -S --noconfirm --needed mingw-w64-x86_64-pkgconf mingw-w64-x86_64-freetype mingw-w64-x86_64-ftgl
+
+      - name: Build
+        run: stack --no-terminal build
+
+      - name: Collect binary
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          $root = stack --no-terminal path --local-install-root
+          Copy-Item "$root\bin\netwire01-exe.exe" artifact\
+          Copy-Item DroidSansMono.ttf artifact\
+          Get-ChildItem artifact
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netwire01-windows-x64
+          path: artifact
