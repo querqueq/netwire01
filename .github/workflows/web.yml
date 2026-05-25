@@ -60,7 +60,9 @@ jobs:
       - name: Build (JavaScript backend)
         working-directory: web
         run: |
-          cabal build --with-compiler=javascript-unknown-ghcjs-ghc
+          cabal build \
+            --with-compiler=javascript-unknown-ghcjs-ghc \
+            --with-hc-pkg=javascript-unknown-ghcjs-ghc-pkg
           echo "--- produced all.js files ---"
           find dist-newstyle -name all.js
 
