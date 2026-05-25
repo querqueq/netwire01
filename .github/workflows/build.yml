@@ -2,6 +2,7 @@ name: Build (x64 Linux)
 
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
