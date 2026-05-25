@@ -16,28 +16,49 @@
   <div id="stage"><canvas id="canvas" width="600" height="600"></canvas></div>
 
   <script>
-    // Draw a heptagon rotated by `angle` radians. Called from Haskell
-    // (web/Main.hs) once per animation frame.
-    const SIDES = 7;
-    globalThis.drawScene = function (angle) {
+    // Stars are set once at startup by Haskell; the rocket polygon is sent
+    // every frame. Both are "x,y[,b];..." strings in world coords ([-1,1],
+    // +y up). worldToPx maps world coords to canvas pixels.
+    let STARS = [];
+
+    function parsePoints(s) {
+      return s.split(';').filter(Boolean).map(t => t.split(',').map(Number));
+    }
+
+    function worldToPx(w, h, x, y) {
+      return [w / 2 + x * (w / 2), h / 2 - y * (h / 2)];
+    }
+
+    globalThis.setStars = function (s) {
+      STARS = parsePoints(s).map(([x, y, b]) => ({ x, y, b }));
+    };
+
+    globalThis.drawFrame = function (polyStr) {
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
-      const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.3;
-      ctx.clearRect(0, 0, w, h);
-      ctx.beginPath();
-      for (let i = 0; i < SIDES; i++) {
-        const a = (i / SIDES) * Math.PI * 2 - Math.PI / 2 + angle;
-        const x = cx + r * Math.cos(a);
-        const y = cy + r * Math.sin(a);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+
+      for (const s of STARS) {
+        const [px, py] = worldToPx(w, h, s.x, s.y);
+        const v = Math.round(s.b * 255);
+        ctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+        ctx.fillRect(px, py, 2, 2);
       }
+
+      const pts = parsePoints(polyStr);
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => {
+        const [px, py] = worldToPx(w, h, x, y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
       ctx.closePath();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      document.getElementById('label').textContent =
-        'netwire01 web — frame loop running (' + angle.toFixed(1) + ' rad)';
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      document.getElementById('label').textContent = 'netwire01 — rocket in starfield';
     };
   </script>
   <script src="all.js"></script>
