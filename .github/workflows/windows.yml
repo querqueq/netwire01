@@ -5,10 +5,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Cancel superseded runs of this workflow on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: stack build (lts-8.0 / GHC 8.0.2)
+    name: stack build (Windows, lts-8.0 / GHC 8.0.2)
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
