@@ -1,0 +1,61 @@
+name: Build (x64 Linux)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: stack build (lts-8.0 / GHC 8.0.2)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          # libtinfo5/libncurses5: required by the GHC 8.0.2 bindist used by lts-8.0
+          # ftgl-dev: FTGL text rendering
+          # libxxf86vm-dev + X11 dev libs: needed to build GLFW-b's bundled GLFW
+          # mesa GL/GLU: OpenGL / GLU
+          sudo apt-get install -y --no-install-recommends \
+            libgmp-dev \
+            libtinfo5 \
+            libncurses5 \
+            ftgl-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxxf86vm-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxinerama-dev
+
+      - name: Cache Stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml', 'netwire01.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-
+
+      - name: Set up Stack
+        run: |
+          mkdir -p ~/.local/bin
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -sSL https://get.haskellstack.org/ | sh -s - -d ~/.local/bin
+
+      - name: Install GHC
+        run: stack --no-terminal setup --install-ghc
+
+      - name: Build dependencies
+        run: stack --no-terminal build --only-dependencies
+
+      - name: Build
+        run: stack --no-terminal build
