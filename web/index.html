@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>netwire01 — web spike</title>
+  <title>netwire01 — web</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; }
     #stage { display: flex; align-items: center; justify-content: center; height: 100%; }
@@ -16,16 +16,18 @@
   <div id="stage"><canvas id="canvas" width="600" height="600"></canvas></div>
 
   <script>
-    // Called from Haskell (web/Main.hs) once the JS backend output loads.
-    globalThis.drawScene = function (n) {
+    // Draw a heptagon rotated by `angle` radians. Called from Haskell
+    // (web/Main.hs) once per animation frame.
+    const SIDES = 7;
+    globalThis.drawScene = function (angle) {
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.3;
       ctx.clearRect(0, 0, w, h);
       ctx.beginPath();
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      for (let i = 0; i < SIDES; i++) {
+        const a = (i / SIDES) * Math.PI * 2 - Math.PI / 2 + angle;
         const x = cx + r * Math.cos(a);
         const y = cy + r * Math.sin(a);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -35,7 +37,7 @@
       ctx.lineWidth = 2;
       ctx.stroke();
       document.getElementById('label').textContent =
-        'netwire01 web spike — Haskell drew a ' + n + '-gon';
+        'netwire01 web — frame loop running (' + angle.toFixed(1) + ' rad)';
     };
   </script>
   <script src="all.js"></script>
