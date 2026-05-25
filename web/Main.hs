@@ -13,7 +13,7 @@ module Main where
 
 import Prelude hiding ((.), id)
 import Control.Wire
-import FRP.Netwire ()
+import FRP.Netwire
 import Data.IORef
 import GHC.JS.Foreign.Callback (Callback, syncCallback, OnBlocked(ContinueAsync))
 
