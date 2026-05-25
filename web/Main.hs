@@ -1,17 +1,33 @@
 {-# LANGUAGE JavaScriptFFI #-}
 
--- Toolchain spike for the web port: prove that Haskell compiled with the
--- GHC JavaScript backend runs in the browser and can drive an HTML5 canvas.
--- The real game logic (netwire FRP) is ported in a later step; here Haskell
--- just decides how many sides the polygon has and hands it to a JS routine
--- defined in index.html. If the on-page label updates, Haskell's main ran.
+-- Milestone A1 of the web port: a requestAnimationFrame-driven loop in
+-- Haskell. This proves the per-frame Haskell <-> JS callback mechanism that
+-- the game loop is built on, before the netwire FRP core is introduced.
+-- Haskell holds the rotation angle, advances it each frame, and hands it to
+-- the JS canvas renderer (index.html). Visible result: a spinning polygon.
 module Main where
 
-foreign import javascript unsafe "((n) => { globalThis.drawScene(n); })"
-  drawScene :: Int -> IO ()
+import Data.IORef
+import GHC.JS.Foreign.Callback (Callback, asyncCallback)
 
-sides :: Int
-sides = 7
+foreign import javascript unsafe "((f) => { globalThis.requestAnimationFrame(f); })"
+  requestAnimationFrame :: Callback (IO ()) -> IO ()
+
+foreign import javascript unsafe "((a) => { globalThis.drawScene(a); })"
+  drawScene :: Double -> IO ()
+
+-- Radians advanced per frame (~60fps -> ~1.2 rad/s).
+step :: Double
+step = 0.02
 
 main :: IO ()
-main = drawScene sides
+main = do
+  angleRef <- newIORef 0
+  cbRef    <- newIORef (error "callback not yet initialised")
+  cb <- asyncCallback $ do
+    angle <- (+ step) <$> readIORef angleRef
+    writeIORef angleRef angle
+    drawScene angle
+    readIORef cbRef >>= requestAnimationFrame
+  writeIORef cbRef cb
+  requestAnimationFrame cb
