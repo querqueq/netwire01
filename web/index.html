@@ -133,6 +133,29 @@
         'netwire01 — x:' + camX.toFixed(2) + ' y:' + camY.toFixed(2);
     };
   </script>
-  <script src="all.js"></script>
+  <!-- Load the Haskell game: a wasm32-wasi reactor module. The WASI shim
+       provides the (tiny) syscall surface the GHC RTS needs; the generated
+       ghc_wasm_jsffi.js (emitted by GHC's post-link.mjs at build time)
+       carries the JSFFI import snippets from web/Main.hs. -->
+  <script type="module">
+    import { WASI, OpenFile, File, ConsoleStdout }
+      from "https://cdn.jsdelivr.net/npm/@bjorn3/browser_wasi_shim@0.3.0/dist/index.js";
+    import ghc_wasm_jsffi from "./ghc_wasm_jsffi.js";
+
+    const fds = [
+      new OpenFile(new File([])), // stdin
+      ConsoleStdout.lineBuffered(msg => console.log(msg)),
+      ConsoleStdout.lineBuffered(msg => console.warn(msg)),
+    ];
+    const wasi = new WASI([], [], fds);
+    const instance_exports = {};
+    const { instance } = await WebAssembly.instantiateStreaming(fetch("netwire01-web.wasm"), {
+      wasi_snapshot_preview1: wasi.wasiImport,
+      ghc_wasm_jsffi: ghc_wasm_jsffi(instance_exports),
+    });
+    Object.assign(instance_exports, instance.exports);
+    wasi.initialize(instance);
+    await instance.exports.hs_start();
+  </script>
 </body>
 </html>
