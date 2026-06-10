@@ -74,6 +74,14 @@ jobs:
           "$(wasm32-wasi-ghc --print-libdir)"/post-link.mjs --input "$HS_WASM" --output _site/ghc_wasm_jsffi.js
           ls -la _site
 
+      - name: Smoke test (boot wasm under node)
+        run: |
+          SMOKE="$(mktemp -d)"
+          cp _site/netwire01-web.wasm _site/ghc_wasm_jsffi.js web/smoke.mjs "$SMOKE"
+          cd "$SMOKE"
+          npm install --no-save @bjorn3/browser_wasi_shim@0.3.0
+          node smoke.mjs
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
