@@ -1,4 +1,4 @@
-name: Web build (GHC JS backend)
+name: Web build (GHC WebAssembly backend)
 
 on:
   push:
@@ -18,68 +18,69 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EMSDK_VERSION: 3.1.57
-  GHCJS_VERSION: javascript-unknown-ghcjs-9.10.0.20240413
+  # ghc-wasm-meta flavour: GHC release series for the wasm32-wasi toolchain.
+  FLAVOUR: '9.12'
 
 jobs:
   build:
-    name: cabal build (JavaScript backend)
+    name: cabal build (WebAssembly backend)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSDK_VERSION }}
+      - name: Install GHC WASM toolchain (ghc-wasm-meta)
+        run: |
+          pushd "$(mktemp -d)"
+          curl -f -L --retry 5 https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/archive/master/ghc-wasm-meta-master.tar.gz | tar xz --strip-components=1
+          ./setup.sh
+          ~/.ghc-wasm/add_to_github_path.sh
+          popd
 
       - name: Tool versions
         run: |
-          emcc --version
-          ghcup --version
-          cabal --version
+          wasm32-wasi-ghc --version
+          wasm32-wasi-cabal --version
 
-      - name: Cache GHCup / cabal store
+      - name: Cache cabal store
         uses: actions/cache@v4
         with:
           path: |
-            ~/.ghcup
-            ~/.cabal
-            ~/.local/state/cabal
-            ~/.cache/cabal
+            ~/.ghc-wasm/.cabal/store
             web/dist-newstyle
-          key: ${{ runner.os }}-ghcjs-${{ env.GHCJS_VERSION }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project') }}
+          key: ${{ runner.os }}-wasm-${{ env.FLAVOUR }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project') }}
           restore-keys: |
-            ${{ runner.os }}-ghcjs-${{ env.GHCJS_VERSION }}-
-
-      - name: Install GHC JavaScript backend
-        run: |
-          ghcup config add-release-channel https://raw.githubusercontent.com/haskell/ghcup-metadata/develop/ghcup-cross-0.0.8.yaml
-          emconfigure ghcup install ghc --set "$GHCJS_VERSION"
-          javascript-unknown-ghcjs-ghc --version
+            ${{ runner.os }}-wasm-${{ env.FLAVOUR }}-
 
       - name: Update package index
-        run: cabal update
+        working-directory: web
+        run: wasm32-wasi-cabal update
 
-      - name: Build (JavaScript backend)
+      - name: Build (WebAssembly backend)
         working-directory: web
         run: |
-          cabal build \
-            --with-compiler=javascript-unknown-ghcjs-ghc \
-            --with-hc-pkg=javascript-unknown-ghcjs-ghc-pkg
-          echo "--- produced all.js files ---"
-          find dist-newstyle -name all.js
+          wasm32-wasi-cabal build
+          echo "--- produced wasm files ---"
+          find dist-newstyle -name '*.wasm'
 
-      - name: Assemble site
+      - name: Post-link JSFFI glue and assemble site
         run: |
           mkdir -p _site
           cp web/index.html _site/index.html
-          ALL_JS="$(find web/dist-newstyle -name all.js | head -n1)"
-          echo "Using: $ALL_JS"
-          cp "$ALL_JS" _site/all.js
+          HS_WASM="$(find web/dist-newstyle -name '*.wasm' | head -n1)"
+          echo "Using: $HS_WASM"
+          cp "$HS_WASM" _site/netwire01-web.wasm
+          "$(wasm32-wasi-ghc --print-libdir)"/post-link.mjs --input "$HS_WASM" --output _site/ghc_wasm_jsffi.js
           ls -la _site
+
+      - name: Smoke test (boot wasm under node)
+        run: |
+          SMOKE="$(mktemp -d)"
+          cp _site/netwire01-web.wasm _site/ghc_wasm_jsffi.js web/smoke.mjs "$SMOKE"
+          cd "$SMOKE"
+          npm install --no-save @bjorn3/browser_wasi_shim@0.3.0
+          node smoke.mjs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

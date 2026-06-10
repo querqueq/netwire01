@@ -1,6 +1,4 @@
-{-# LANGUAGE JavaScriptFFI #-}
-
--- Step B (controls + physics): the playable game. The ship physics are
+-- Web port, GHC WebAssembly backend (wasm32-wasi). The ship physics are
 -- ported faithfully from the desktop src/app (Main.hs shipWire): thrust is
 -- integrated relative to the ship's heading, with no friction, so the ship
 -- drifts (Newtonian). Six controls feed a per-frame acceleration triple
@@ -8,6 +6,11 @@
 -- on-screen buttons (touch) and/or the keyboard (desktop). The camera
 -- follows the ship, and the starfield wraps around the camera so motion is
 -- visible.
+--
+-- The module is linked as a wasm32-wasi *reactor*: JS instantiates the
+-- module, runs WASI _initialize, then calls the exported hs_start, which
+-- registers a requestAnimationFrame callback that keeps the RTS alive
+-- across frames.
 module Main where
 
 import Prelude hiding ((.), id)
@@ -18,24 +21,30 @@ import Data.Bits ((.&.))
 import Data.IORef
 import Data.List (intercalate)
 import System.Random
-import GHC.JS.Prim (JSVal, toJSString)
-import GHC.JS.Foreign.Callback (Callback, syncCallback, OnBlocked(ContinueAsync))
+import GHC.Wasm.Prim
 
-foreign import javascript unsafe "((f) => { globalThis.requestAnimationFrame(f); })"
-  requestAnimationFrame :: Callback (IO ()) -> IO ()
+foreign export javascript "hs_start" main :: IO ()
 
-foreign import javascript unsafe "((s) => { globalThis.setStars(s); })"
-  js_setStars :: JSVal -> IO ()
+-- Turn a Haskell IO action into a JS function (created once, reused for
+-- every frame; never freed because the rAF loop lives forever).
+foreign import javascript "wrapper"
+  mkCallback :: IO () -> IO JSVal
+
+foreign import javascript unsafe "requestAnimationFrame($1)"
+  js_requestAnimationFrame :: JSVal -> IO ()
+
+foreign import javascript unsafe "setStars($1)"
+  js_setStars :: JSString -> IO ()
 
 -- Render a frame: camera position (world) + the rocket polygon (camera space).
-foreign import javascript unsafe "((cx,cy,s) => { globalThis.drawFrame(cx,cy,s); })"
-  js_drawFrame :: Double -> Double -> JSVal -> IO ()
+foreign import javascript unsafe "drawFrame($1, $2, $3)"
+  js_drawFrame :: Double -> Double -> JSString -> IO ()
 
-foreign import javascript unsafe "(() => { return globalThis.performance.now(); })"
+foreign import javascript unsafe "performance.now()"
   jsNow :: IO Double
 
 -- Current control bitmask (see bit assignments below).
-foreign import javascript unsafe "(() => { return globalThis.controlBits(); })"
+foreign import javascript unsafe "controlBits()"
   jsControlBits :: IO Int
 
 -- Geometry, ported from src/Lib.hs --------------------------------------------
@@ -148,7 +157,7 @@ main = do
   prevRef <- newIORef t0
   wireRef <- newIORef shipWire
   cbRef   <- newIORef (error "callback not yet initialised")
-  cb <- syncCallback ContinueAsync $ do
+  cb <- mkCallback $ do
     now  <- jsNow
     prev <- readIORef prevRef
     writeIORef prevRef now
@@ -161,6 +170,6 @@ main = do
       Right (px, py, heading, _vx, _vy) ->
         js_drawFrame px py (toJSString (polyToString (rocket heading)))
       Left _ -> pure ()
-    readIORef cbRef >>= requestAnimationFrame
+    readIORef cbRef >>= js_requestAnimationFrame
   writeIORef cbRef cb
-  requestAnimationFrame cb
+  js_requestAnimationFrame cb
