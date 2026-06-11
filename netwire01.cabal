@@ -16,6 +16,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib, Stars, Particles
   build-depends:       base >= 4.7 && < 5
+                     , netwire01-core
                      , netwire
                      , netwire-input
                      , netwire-input-glfw
@@ -33,6 +34,7 @@ executable netwire01-exe
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , netwire01
+                     , netwire01-core
                      , netwire
                      , netwire-input
                      , netwire-input-glfw

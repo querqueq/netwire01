@@ -5,11 +5,11 @@ module Main where
 
 import Prelude hiding ((.)) -- To use (.) in the scope of Categories instead
 import qualified Prelude as P ((.))
-import Control.Wire 
+import Control.Wire
 import qualified Graphics.Rendering.OpenGL.GLU.Matrix as GL
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
-import FRP.Netwire 
+import FRP.Netwire
 import Data.IORef
 import Data.Fixed (mod')
 import Debug.Trace
@@ -20,10 +20,11 @@ import Data.StateVar (($=))
 import FRP.Netwire.Input
 import FRP.Netwire.Input.GLFW
 import qualified Graphics.Rendering.FTGL as FTGL
-import Numeric 
+import Numeric
 import System.Random
 import Lib
 import Particles
+import Core.Ship
 import qualified Data.MemoCombinators as Memo
 
 
@@ -36,62 +37,36 @@ f = 1.5
 s :: FT
 s = 0.02 / f
 
-mainAcceleration :: FT
-mainAcceleration = 0.5 / f
-
-maneuveringAcceleration :: FT
-maneuveringAcceleration = mainAcceleration / 2
-
-rotationalAcceleration :: FT
-rotationalAcceleration = 2
-
 data Frame = Frame
     { playerShip    :: Ship
     , playerThrust  :: [Particle]
     , cam           :: Point
     } deriving Show
 
+-- The ship dynamics and exhaust particles come from netwire01-core
+-- (Core.Ship), driven by the GLFW key wires below. As in the original
+-- formulation, each use of shipW is an independent instance of the same
+-- deterministic integrator, stepped with the same input and time delta.
 frameWire :: (HasTime t s, Fractional t) => InputWire s () Frame
-frameWire = Frame 
-        <$> shipWire 
-        <*> thrustsWire
-        <*> ((\(Ship {..}) -> (posX,posY)) <$> shipWire)
+frameWire = (\ship particles -> Frame ship particles (posX ship, posY ship))
+        <$> shipW
+        <*> (exhaustWire . shipW)
 
-data Ship = Ship
-    { posX      :: FT
-    , posY      :: FT
-    , aX        :: FT
-    , aY        :: FT
-    , vX        :: FT
-    , vY        :: FT
-    , aR        :: FT
-    , vR        :: FT
-    , dR        :: FT
-    , thrusters :: Thrusters
-    } deriving Show
+shipW :: (HasTime t s) => InputWire s () Ship
+shipW = shipWire . thrustInput
 
-thrusterOrigin :: (HasTime t s) => (Ship -> Thruster) -> InputWire s Ship (Point,Point,FT,FT)
-thrusterOrigin t = mkPure_ $ \ship@(Ship {..}) -> do 
-    Right $ ((posX,posY),(vX,vY),dR+(thrusterOffsetR $ t ship),thrusterThrust $ t ship)
-
-allThrusters (Thrusters {..}) = [thrusterFront, thrusterBack, thrusterLeft, thrusterRight]
-
-data Thrusters = Thrusters
-    { thrusterFront     :: Thruster
-    , thrusterBack      :: Thruster
-    , thrusterLeft      :: Thruster
-    , thrusterRight     :: Thruster
-    } deriving Show
-
-data Thruster = Thruster
-    { thrusterOffsetX   :: FT
-    , thrusterOffsetY   :: FT
-    , thrusterOffsetR   :: FT
-    , thrusterThrust    :: FT
-    } deriving Show
+-- Current thrust levels from the GLFW key wires, fed to the shared ship wire.
+thrustInput :: InputWire s () Thrust
+thrustInput = Thrust
+          <$> frontThrust
+          <*> backThrust
+          <*> leftThrust
+          <*> rightThrust
+          <*> rotateLeftThrust
+          <*> rotateRightThrust
 
 prettyShow :: Ship -> String
-prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format val ++ unit ++ " " ++ xs) "" 
+prettyShow (Ship {..}) = foldr (\(name,val,unit) xs -> name ++ ": " ++ format val ++ unit ++ " " ++ xs) ""
     [("X", posX, "")
     ,("Y", posY, "")
     ,("Rotation", dR * 180 / pi, "°")
@@ -112,24 +87,6 @@ rightThrust         = thrust [GLFW.Key'D,GLFW.Key'Right,GLFW.Key'X] maneuveringA
 rotateLeftThrust    = thrust [GLFW.Key'Q] rotationalAcceleration
 rotateRightThrust   = thrust [GLFW.Key'E] (-rotationalAcceleration)
 
-
-shipWire :: (HasTime t s) => InputWire s () Ship
-shipWire = Ship
-       <$> (fst <$> pos)
-       <*> (snd <$> pos)
-       <*> xaccel'
-       <*> yaccel'
-       <*> xspeed'
-       <*> yspeed'
-       <*> raccel'
-       <*> rspeed'
-       <*> rdegree'
-       <*> (Thrusters <$> (Thruster <$> pure 0 <*> pure 0 <*> pure (3*pi/2) <*> frontThrust)
-                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure (3*pi/2) <*> backThrust)
-                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> rightThrust)
-                      <*> (Thruster <$> pure 0 <*> pure 0 <*> pure pi <*> leftThrust)
-           )
-
 generatePoints :: FT -> FT -> FT -> [(FT, FT)]
 generatePoints x y s =
     [ (x - s, y - s)
@@ -137,14 +94,6 @@ generatePoints x y s =
     , (x + s2, y + s)
     , (x - s2, y + s)
     ] where s2 = s / 4
-
-thrustsWire :: (Fractional t, HasTime t s) => InputWire s () [Particle]
-thrustsWire = 
-      mconcat 
-    $ map (thruster.) 
-    $ zipWith (\t s -> (thrusterOrigin $ t . thrusters) . s) 
-      [thrusterRight, thrusterFront, thrusterBack, thrusterLeft]
-    $ repeat shipWire
 
 fromToRational = fromRational . toRational
 
@@ -156,7 +105,7 @@ stars g (xOffset,yOffset) range = zipWith (\(x,y) z -> (x+xOffset,y+yOffset,z))
 type Star2 = (FT,FT,FT)
 
 starsAt :: Point -> [Star2]
-starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) [] 
+starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) []
     [(-r,r ),(0 ,r ),(r ,r )
     ,(-r,0 ),(0 ,0 ),(r ,0 )
     ,(-r,-r),(0 ,-r),(r ,-r)
@@ -172,7 +121,7 @@ hundredStarsAt = (Memo.pair Memo.integral Memo.integral) f
 
 withinRange :: Integer -> FT -> (Integer,Integer)
 withinRange j x = (x'-a,x'-a+j)
-    where a = x' `mod` j 
+    where a = x' `mod` j
           x' = truncate x
 
 starNear :: FT
@@ -184,9 +133,9 @@ starColor :: FT -> GL.Color3 FT
 starColor depth = GL.Color3 v v v
     where depth' = abs depth
           v = (+) 0.1  $ (-) 1 $ normalize (abs starNear,abs starFar) depth'
-          
+
 renderStar2 :: (FT,FT,FT) -> IO ()
-renderStar2 (x,y,z) = GL.renderPrimitive GL.Points $ do 
+renderStar2 (x,y,z) = GL.renderPrimitive GL.Points $ do
     GL.color $ starColor z
     GL.vertex $ GL.Vertex3 x y z
 
@@ -227,17 +176,16 @@ runNetwork font window inptCtrl inpt session wire = do
             FTGL.renderFont font (prettyShow ship) FTGL.Front
             GL.color $ GL.Color3 1 1 (1 :: GL.GLfloat)
             {-- old ship
-            GL.renderPrimitive GL.Quads 
-                $ mapM_ renderPoint 
+            GL.renderPrimitive GL.Quads
+                $ mapM_ renderPoint
                 $ map (rotatePoint (posX,posY) dR)
                 $ generatePoints posX posY s
             --}
-            GL.renderPrimitive GL.Polygon 
+            GL.renderPrimitive GL.Polygon
                 $ mapM_ renderPoint
                 $ map (rotatePoint (posX,posY) dR)
                 $ map (move (posX,posY))
-                $ stretch (1.05,1.95)
-                $ nGon 0.02 7
+                $ rocket 0.02
             --GL.preservingMatrix $ do
             --GL.matrixMode $= GL.Modelview 0
             GL.loadIdentity
@@ -246,39 +194,6 @@ runNetwork font window inptCtrl inpt session wire = do
             GL.flush
             GLFW.swapBuffers window
             runNetwork font window inptCtrl inpt'' session' wire'
-
-xaccel' :: InputWire s () FT
-xaccel' = (+) <$> leftThrust <*> rightThrust
-
-xspeed' :: HasTime t s => InputWire s () FT
-xspeed' = integral 0 . (fst <$> rxyaccel)
-
-yaccel' :: InputWire s () FT
-yaccel' = (+) <$> frontThrust <*> backThrust
-
-yspeed' :: HasTime t s => InputWire s () FT
-yspeed' = integral 0 . (snd <$> rxyaccel)
-
-raccel' :: InputWire s () FT
-raccel' = (+) <$> rotateLeftThrust <*> rotateRightThrust
-
-rspeed' :: HasTime t s => InputWire s () FT
-rspeed' = integral 0 . raccel'
-
-rdegree' :: HasTime t s => InputWire s () FT
-rdegree' = (`mod'` (2*pi)) <$> integral 0 . raccel'
-
---negateInertia :: Monoid e => Wire s e IO () FT
-
-pos :: HasTime t s => InputWire s () (FT, FT)
-pos = (,) <$> integral 0 . (fst <$> rspeeds') <*> integral 0 . (snd <$> rspeeds')
-
-rxyaccel :: HasTime t s => InputWire s () (FT, FT)
-rxyaccel = (\d (aX,aY) -> rotatePoint (0,0) d (aX,aY)) <$> rdegree' <*> ((,) <$> xaccel' <*> yaccel')
-
-rspeeds' :: HasTime t s => InputWire s () (FT,FT)
-rspeeds' = (,) <$> xspeed' <*> yspeed'
-
 
 main = do
     GLFW.init

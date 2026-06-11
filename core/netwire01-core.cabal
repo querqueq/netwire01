@@ -1,0 +1,26 @@
+name:                netwire01-core
+version:             0.1.0.0
+synopsis:            Platform-independent game logic for netwire01
+description:         Pure netwire game logic (geometry, ship physics, thruster
+                     particles, starfield) shared by the desktop OpenGL frontend
+                     (stack, GHC 8.0.2) and the web WebAssembly frontend
+                     (wasm32-wasi, GHC 9.12). Must stay free of OpenGL, GLFW,
+                     FTGL and JS dependencies, and must keep building on both
+                     compilers.
+license:             BSD3
+license-file:        LICENSE
+author:              querqueq
+category:            Game
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Core.Geometry
+                     , Core.Particles
+                     , Core.Ship
+                     , Core.Stars
+  build-depends:       base >= 4.7 && < 5
+                     , netwire
+                     , random
+  default-language:    Haskell2010

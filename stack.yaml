@@ -2,6 +2,7 @@ flags: {}
 extra-package-dbs: null
 packages:
 - '.'
+- core
 extra-deps:
 - FTGL-2.1
 - Hipmunk-5.2.0.17

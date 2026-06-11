@@ -49,7 +49,7 @@ jobs:
           path: |
             ~/.ghc-wasm/.cabal/store
             web/dist-newstyle
-          key: ${{ runner.os }}-wasm-${{ env.FLAVOUR }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project') }}
+          key: ${{ runner.os }}-wasm-${{ env.FLAVOUR }}-${{ hashFiles('web/**/*.cabal', 'web/cabal.project', 'core/**/*.cabal') }}
           restore-keys: |
             ${{ runner.os }}-wasm-${{ env.FLAVOUR }}-
 
