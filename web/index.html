@@ -104,7 +104,7 @@
       STARS = parsePoints(s).map(([x, y, b]) => ({ x, y, b }));
     };
 
-    globalThis.drawFrame = function (camX, camY, polyStr) {
+    globalThis.drawFrame = function (camX, camY, polyStr, particleStr) {
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
@@ -116,6 +116,16 @@
         const [px, py] = worldToPx(w, h, wrap(s.x - camX), wrap(s.y - camY));
         const v = Math.round(s.b * 255);
         ctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+        ctx.fillRect(px, py, 2, 2);
+      }
+
+      // Thruster exhaust: world-space points, same colour as the desktop's
+      // renderThrustParticles (orange, half-transparent).
+      ctx.fillStyle = 'rgba(255,178,0,0.5)';
+      for (const [x, y] of parsePoints(particleStr)) {
+        const dx = x - camX, dy = y - camY;
+        if (dx < -1 || dx > 1 || dy < -1 || dy > 1) continue;
+        const [px, py] = worldToPx(w, h, dx, dy);
         ctx.fillRect(px, py, 2, 2);
       }
 

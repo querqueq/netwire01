@@ -21,17 +21,25 @@ globalThis.setStars = (s) => {
   console.log("setStars: 150 stars received");
 };
 globalThis.controlBits = () => 4; // hold forward thrust so the ship moves
-globalThis.drawFrame = (cx, cy, poly) => {
+globalThis.drawFrame = (cx, cy, poly, particles) => {
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) fail("non-finite camera position");
   const pts = String(poly).split(";");
   if (pts.length !== 7) fail(`expected 7 polygon points, got ${pts.length}`);
+  const ps = String(particles).split(";").filter(Boolean);
+  for (const p of ps) {
+    const [x, y] = p.split(",").map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) fail(`non-finite particle: ${p}`);
+  }
   frames++;
-  last = { cx, cy };
+  last = { cx, cy, nParticles: ps.length };
 };
 globalThis.requestAnimationFrame = (f) => {
   if (frames >= TARGET_FRAMES) {
     if (!(Math.hypot(last.cx, last.cy) > 0)) fail("ship did not move under thrust");
-    console.log(`SMOKE OK: ${frames} frames, cam=(${last.cx}, ${last.cy})`);
+    // The front thruster expels 3 particles per frame with ~1s lifetimes, so
+    // by now a trail must exist.
+    if (!(last.nParticles > 0)) fail("no exhaust particles under thrust");
+    console.log(`SMOKE OK: ${frames} frames, cam=(${last.cx}, ${last.cy}), ${last.nParticles} particles`);
     process.exit(0);
   }
   setTimeout(f, 16);
