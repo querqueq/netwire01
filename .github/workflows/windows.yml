@@ -15,7 +15,7 @@ jobs:
   build:
     name: stack build (Windows, lts-8.0 / GHC 8.0.2)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -50,6 +50,13 @@ jobs:
         run: |
           stack --no-terminal exec -- pacman -Sy --noconfirm
           stack --no-terminal exec -- pacman -S --noconfirm --needed mingw-w64-x86_64-pkgconf mingw-w64-x86_64-freetype mingw-w64-x86_64-ftgl
+
+      # GHC 8.0.2's ghc-pkg predates proper file locking on Windows, so
+      # concurrent `Cabal register` calls race on the snapshot package.cache
+      # and fail with a spurious permission error. Build the dependency tree
+      # one package at a time; with a warm cache this step is a no-op.
+      - name: Build dependencies (serialized)
+        run: stack --no-terminal build --only-dependencies -j1
 
       - name: Build
         run: stack --no-terminal build
