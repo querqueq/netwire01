@@ -37,10 +37,11 @@ foreign import javascript unsafe "requestAnimationFrame($1)"
 foreign import javascript unsafe "setStars($1)"
   js_setStars :: JSString -> IO ()
 
--- Render a frame: camera position (world), the rocket polygon (camera
--- space), and the exhaust particles (world space).
-foreign import javascript unsafe "drawFrame($1, $2, $3, $4)"
-  js_drawFrame :: Double -> Double -> JSString -> JSString -> IO ()
+-- Render a frame: camera position and velocity (world; the velocity drives
+-- the desktop-style speed zoom), the rocket polygon (camera space), and the
+-- exhaust particles (world space).
+foreign import javascript unsafe "drawFrame($1, $2, $3, $4, $5, $6)"
+  js_drawFrame :: Double -> Double -> Double -> Double -> JSString -> JSString -> IO ()
 
 foreign import javascript unsafe "performance.now()"
   jsNow :: IO Double
@@ -87,8 +88,8 @@ gameWire = (,) <$> shipWire <*> (exhaustWire . shipWire)
 polyToString :: [Point] -> String
 polyToString = intercalate ";" . map (\(x, y) -> show x ++ "," ++ show y)
 
-starsToString :: [(Double, Double, Double)] -> String
-starsToString = intercalate ";" . map (\(x, y, b) -> show x ++ "," ++ show y ++ "," ++ show b)
+starsToString :: [Star2] -> String
+starsToString = intercalate ";" . map (\(x, y, z) -> show x ++ "," ++ show y ++ "," ++ show z)
 
 particlesToString :: [Particle] -> String
 particlesToString = intercalate ";" . map (\p -> show (particleX p) ++ "," ++ show (particleY p))
@@ -97,11 +98,12 @@ particlesToString = intercalate ";" . map (\p -> show (particleX p) ++ "," ++ sh
 
 main :: IO ()
 main = do
-  js_setStars (toJSString (starsToString (uniformStars 150)))
-  t0      <- jsNow
-  prevRef <- newIORef t0
-  wireRef <- newIORef gameWire
-  cbRef   <- newIORef (error "callback not yet initialised")
+  js_setStars (toJSString (starsToString (starsAt (0, 0))))
+  t0       <- jsNow
+  prevRef  <- newIORef t0
+  wireRef  <- newIORef gameWire
+  chunkRef <- newIORef (starsChunk (0, 0))
+  cbRef    <- newIORef (error "callback not yet initialised")
   cb <- mkCallback $ do
     now  <- jsNow
     prev <- readIORef prevRef
@@ -112,8 +114,16 @@ main = do
     (result, wire') <- stepWire wire (Timed dt ()) (Right (decodeControls bits))
     writeIORef wireRef wire'
     case result of
-      Right (ship, particles) ->
-        js_drawFrame (posX ship) (posY ship)
+      Right (ship, particles) -> do
+        -- The starfield only changes when the ship crosses into a new grid
+        -- cell; only then is the (~1000 star) field re-marshalled to JS.
+        let chunk = starsChunk (posX ship, posY ship)
+        prevChunk <- readIORef chunkRef
+        if chunk /= prevChunk
+          then do writeIORef chunkRef chunk
+                  js_setStars (toJSString (starsToString (starsAt (posX ship, posY ship))))
+          else pure ()
+        js_drawFrame (posX ship) (posY ship) (vX ship) (vY ship)
                      (toJSString (polyToString (map (rotatePoint (0, 0) (dR ship)) (rocket 0.08))))
                      (toJSString (particlesToString particles))
       Left _ -> pure ()

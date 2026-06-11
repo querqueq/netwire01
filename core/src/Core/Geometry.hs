@@ -4,6 +4,8 @@
 -- without conversion.
 module Core.Geometry where
 
+import Numeric
+
 type FT = Double
 type Point = (FT,FT)
 
@@ -38,3 +40,5 @@ pairs (x':(x'':xs)) = (x',x'') : pairs xs
 
 mapTuple :: (a -> b) -> (a,a) -> (b,b)
 mapTuple f (x,y) = (f x,f y)
+
+format x = showFFloat (Just 2) x ""

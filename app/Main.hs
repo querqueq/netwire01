@@ -25,7 +25,7 @@ import System.Random
 import Lib
 import Particles
 import Core.Ship
-import qualified Data.MemoCombinators as Memo
+import Core.Stars
 
 
 title :: String
@@ -96,38 +96,6 @@ generatePoints x y s =
     ] where s2 = s / 4
 
 fromToRational = fromRational . toRational
-
-stars :: (RandomGen g) => g -> Point -> FT -> [Star2]
-stars g (xOffset,yOffset) range = zipWith (\(x,y) z -> (x+xOffset,y+yOffset,z))
-    (pairs $ randomRs (-range,range) g)
-    (randomRs (starNear,starFar) g)
-
-type Star2 = (FT,FT,FT)
-
-starsAt :: Point -> [Star2]
-starsAt (x,y) = foldl (\ss (xo,yo) -> starsAt' (xo+x,yo+y) ++ ss) []
-    [(-r,r ),(0 ,r ),(r ,r )
-    ,(-r,0 ),(0 ,0 ),(r ,0 )
-    ,(-r,-r),(0 ,-r),(r ,-r)
-    ]
-    where r = 4
-
-starsAt' :: Point -> [Star2]
-starsAt' (x,y) = hundredStarsAt (f x,f y) where f = fromIntegral . fst . withinRange 4
-
-hundredStarsAt :: (Int,Int) -> [Star2]
-hundredStarsAt = (Memo.pair Memo.integral Memo.integral) f
-    where f (x,y) = take 111 $ stars (mkStdGen $ truncate $ fromIntegral $ x+y) (fromIntegral x,fromIntegral y) 4
-
-withinRange :: Integer -> FT -> (Integer,Integer)
-withinRange j x = (x'-a,x'-a+j)
-    where a = x' `mod` j
-          x' = truncate x
-
-starNear :: FT
-starNear = -200
-starFar :: FT
-starFar = -500
 
 starColor :: FT -> GL.Color3 FT
 starColor depth = GL.Color3 v v v
