@@ -16,13 +16,18 @@ setTimeout(() => fail(`timed out after 30s with ${frames} frames`), 30000);
 
 // Stubs for the five browser interop points used by web/Main.hs.
 globalThis.setStars = (s) => {
-  const n = String(s).split(";").length;
-  if (n !== 150) fail(`expected 150 stars, got ${n}`);
-  console.log("setStars: 150 stars received");
+  // 3x3 chunks of 111 stars (Core.Stars.starsAt), each star an x,y,z triple.
+  const ss = String(s).split(";");
+  if (ss.length !== 999) fail(`expected 999 stars, got ${ss.length}`);
+  const [x, y, z] = ss[0].split(",").map(Number);
+  if (!Number.isFinite(x) || !Number.isFinite(z) || z > -200 || z < -500)
+    fail(`bad star depth: ${ss[0]}`);
+  console.log("setStars: 999 stars received");
 };
 globalThis.controlBits = () => 4; // hold forward thrust so the ship moves
-globalThis.drawFrame = (cx, cy, poly, particles) => {
+globalThis.drawFrame = (cx, cy, vx, vy, poly, particles) => {
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) fail("non-finite camera position");
+  if (!Number.isFinite(vx) || !Number.isFinite(vy)) fail("non-finite velocity");
   const pts = String(poly).split(";");
   if (pts.length !== 7) fail(`expected 7 polygon points, got ${pts.length}`);
   const ps = String(particles).split(";").filter(Boolean);

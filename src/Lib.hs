@@ -9,7 +9,6 @@ import FRP.Netwire
 import FRP.Netwire.Input
 import FRP.Netwire.Input.GLFW
 import Control.Wire.Core
-import Numeric
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import Data.List
@@ -28,10 +27,6 @@ comet g r n =
       (\p -> foldr dent p $ take (n `div` 3) $ randomRTuples (-r,r) g)
     $ stretch (head $ randomRTuples (0.9,1.2) g)
     $ nGon r (n `div` 3 * 2)
-
-alternateByInhibit w1 w2 = w1 --> w2 --> alternateByInhibit w1 w2
-
-format x = showFFloat (Just 2) x ""
 
 renderPoint :: (FT, FT) -> IO ()
 renderPoint (x, y) = GL.vertex $ GL.Vertex3 (realToFrac x :: GL.GLfloat) (realToFrac y :: GL.GLfloat) (-100)

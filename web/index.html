@@ -85,54 +85,66 @@
     }
 
     // --- Rendering ----------------------------------------------------------
-    // Stars are world-space points set once; the camera (ship position) is
-    // passed each frame and stars wrap around it (tile size 2 = viewport) so
-    // the field feels continuous as the ship flies. The rocket polygon is in
-    // camera space (ship at screen centre).
+    // The renderer mirrors the desktop's GL camera (app/Main.hs runNetwork):
+    // a 1° field of view looking down -z from height
+    // camZ = sqrt((|vX|+|vY|+0.01)*10000) above the ship, so the view zooms
+    // out with speed. Stars are world-space (x,y,z) points (z in
+    // [-500,-200], from Core.Stars) re-sent only when the ship crosses a
+    // chunk boundary; their depth gives parallax and brightness. The ship
+    // and exhaust live on the z=-100 plane (the desktop's renderPoint), the
+    // rocket polygon arriving in camera space.
     let STARS = [];
 
     function parsePoints(s) {
       return s.split(';').filter(Boolean).map(t => t.split(',').map(Number));
     }
-    function worldToPx(w, h, x, y) {
-      return [w / 2 + x * (w / 2), h / 2 - y * (h / 2)];
-    }
-    // Wrap v into [-1, 1).
-    function wrap(v) { return ((v + 1) % 2 + 2) % 2 - 1; }
+
+    const TAN_HALF_FOV = Math.tan(Math.PI / 360); // GL.perspective fov of 1°
 
     globalThis.setStars = function (s) {
-      STARS = parsePoints(s).map(([x, y, b]) => ({ x, y, b }));
+      STARS = parsePoints(s).map(([x, y, z]) => ({ x, y, z }));
     };
 
-    globalThis.drawFrame = function (camX, camY, polyStr, particleStr) {
+    globalThis.drawFrame = function (camX, camY, vX, vY, polyStr, particleStr) {
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
+
+      const camZ = Math.sqrt((Math.abs(vX) + Math.abs(vY) + 0.01) * 10000);
+      // NDC units per world unit on a plane `depth` below the ship plane.
+      const scaleAt = depth => 1 / ((camZ + depth) * TAN_HALF_FOV);
+      const toPx = (x, y, f) => [w / 2 + x * f * (w / 2), h / 2 - y * f * (h / 2)];
 
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
 
       for (const s of STARS) {
-        const [px, py] = worldToPx(w, h, wrap(s.x - camX), wrap(s.y - camY));
-        const v = Math.round(s.b * 255);
+        const f = scaleAt(-s.z);
+        const nx = (s.x - camX) * f, ny = (s.y - camY) * f;
+        if (nx < -1 || nx > 1 || ny < -1 || ny > 1) continue;
+        // Brightness from depth, as in the desktop's starColor.
+        const v = Math.round(255 * Math.min(1, 1.1 - (Math.abs(s.z) - 200) / 300));
+        const [px, py] = toPx(nx, ny, 1);
         ctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
         ctx.fillRect(px, py, 2, 2);
       }
 
-      // Thruster exhaust: world-space points, same colour as the desktop's
-      // renderThrustParticles (orange, half-transparent).
+      const fShip = scaleAt(100);
+
+      // Thruster exhaust: world-space points on the ship plane, same colour
+      // as the desktop's renderThrustParticles (orange, half-transparent).
       ctx.fillStyle = 'rgba(255,178,0,0.5)';
       for (const [x, y] of parsePoints(particleStr)) {
-        const dx = x - camX, dy = y - camY;
-        if (dx < -1 || dx > 1 || dy < -1 || dy > 1) continue;
-        const [px, py] = worldToPx(w, h, dx, dy);
+        const nx = (x - camX) * fShip, ny = (y - camY) * fShip;
+        if (nx < -1 || nx > 1 || ny < -1 || ny > 1) continue;
+        const [px, py] = toPx(nx, ny, 1);
         ctx.fillRect(px, py, 2, 2);
       }
 
       const pts = parsePoints(polyStr);
       ctx.beginPath();
       pts.forEach(([x, y], i) => {
-        const [px, py] = worldToPx(w, h, x, y);
+        const [px, py] = toPx(x, y, fShip);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       });
       ctx.closePath();
